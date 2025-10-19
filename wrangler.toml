@@ -1,0 +1,21 @@
+name = "cfblog"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "cfblog-db"
+database_id = "your-database-id-here"
+
+# R2 Storage binding
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "cfblog-media"
+
+# Environment variables
+[vars]
+JWT_SECRET = "your-jwt-secret-here-change-in-production"
+ADMIN_EMAIL = "admin@example.com"
+SITE_NAME = "My Blog"
+SITE_URL = "http://localhost:8787"
