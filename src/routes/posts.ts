@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env, Post, JWTPayload } from '../types';
-import { formatPostResponse, generateSlug, buildPaginationHeaders, createWPError } from '../utils';
+import { formatPostResponse, generateSlug, generateSlugWithAI, generateExcerptWithAI, buildPaginationHeaders, createWPError, getSiteSettings, sendWebhook } from '../utils';
 import { authMiddleware, optionalAuthMiddleware, canEditPost, canDeletePost, canPublishPost } from '../auth';
 
 const posts = new Hono<{ Bindings: Env }>();
@@ -8,6 +8,9 @@ const posts = new Hono<{ Bindings: Env }>();
 // GET /wp/v2/posts - List posts
 posts.get('/', optionalAuthMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('per_page') || '10');
     const status = c.req.query('status') || 'publish';
@@ -15,6 +18,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     const categories = c.req.query('categories');
     const tags = c.req.query('tags');
     const search = c.req.query('search');
+    const slug = c.req.query('slug');  // 添加 slug 参数
     const orderby = c.req.query('orderby') || 'date';
     const order = c.req.query('order') || 'desc';
 
@@ -26,6 +30,69 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     if (author) {
       query += ' AND author_id = ?';
       params.push(parseInt(author));
+    }
+
+    // Filter by slug
+    if (slug) {
+      query += ' AND slug = ?';
+      params.push(slug);
+    }
+
+    // Filter by categories (支持ID或slug)
+    if (categories) {
+      const categoryValues = categories.split(',');
+
+      // 判断是ID还是slug
+      const isNumeric = categoryValues.every((val: string) => !isNaN(parseInt(val)));
+
+      if (isNumeric) {
+        // 如果是数字ID
+        const categoryIds = categoryValues.map((id: string) => parseInt(id));
+        query += ` AND id IN (SELECT post_id FROM post_categories WHERE category_id IN (${categoryIds.map(() => '?').join(',')}))`;
+        params.push(...categoryIds);
+      } else {
+        // 如果是slug，先查询对应的分类ID
+        const slugPlaceholders = categoryValues.map(() => '?').join(',');
+        const categoryResult = await c.env.DB.prepare(
+          `SELECT id FROM categories WHERE slug IN (${slugPlaceholders})`
+        ).bind(...categoryValues).all();
+
+        const categoryIds = categoryResult.results.map((cat: any) => cat.id);
+
+        if (categoryIds.length > 0) {
+          query += ` AND id IN (SELECT post_id FROM post_categories WHERE category_id IN (${categoryIds.map(() => '?').join(',')}))`;
+          params.push(...categoryIds);
+        } else {
+          // 如果找不到对应的分类，返回空结果
+          query += ' AND 1=0'; // 添加永假条件，返回空结果
+        }
+      }
+    }
+
+    // Filter by tags (支持ID或slug)
+    if (tags) {
+      const tagValues = tags.split(',');
+      const isNumeric = tagValues.every((val: string) => !isNaN(parseInt(val)));
+
+      if (isNumeric) {
+        const tagIds = tagValues.map((id: string) => parseInt(id));
+        query += ` AND id IN (SELECT post_id FROM post_tags WHERE tag_id IN (${tagIds.map(() => '?').join(',')}))`;
+        params.push(...tagIds);
+      } else {
+        const slugPlaceholders = tagValues.map(() => '?').join(',');
+        const tagResult = await c.env.DB.prepare(
+          `SELECT id FROM tags WHERE slug IN (${slugPlaceholders})`
+        ).bind(...tagValues).all();
+
+        const tagIds = tagResult.results.map((tag: any) => tag.id);
+
+        if (tagIds.length > 0) {
+          query += ` AND id IN (SELECT post_id FROM post_tags WHERE tag_id IN (${tagIds.map(() => '?').join(',')}))`;
+          params.push(...tagIds);
+        } else {
+          query += ' AND 1=0';
+        }
+      }
     }
 
     if (search) {
@@ -52,6 +119,62 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     if (author) {
       countQuery += ' AND author_id = ?';
       countParams.push(parseInt(author));
+    }
+    // Filter by slug
+    if (slug) {
+      countQuery += ' AND slug = ?';
+      countParams.push(slug);
+    }
+    // Filter by categories (支持ID或slug)
+    if (categories) {
+      const categoryValues = categories.split(',');
+      const isNumeric = categoryValues.every((val: string) => !isNaN(parseInt(val)));
+
+      if (isNumeric) {
+        const categoryIds = categoryValues.map((id: string) => parseInt(id));
+        countQuery += ` AND id IN (SELECT post_id FROM post_categories WHERE category_id IN (${categoryIds.map(() => '?').join(',')}))`;
+        countParams.push(...categoryIds);
+      } else {
+        // 使用前面查询到的categoryIds
+        const slugPlaceholders = categoryValues.map(() => '?').join(',');
+        const categoryResult = await c.env.DB.prepare(
+          `SELECT id FROM categories WHERE slug IN (${slugPlaceholders})`
+        ).bind(...categoryValues).all();
+
+        const categoryIds = categoryResult.results.map((cat: any) => cat.id);
+
+        if (categoryIds.length > 0) {
+          countQuery += ` AND id IN (SELECT post_id FROM post_categories WHERE category_id IN (${categoryIds.map(() => '?').join(',')}))`;
+          countParams.push(...categoryIds);
+        } else {
+          countQuery += ' AND 1=0';
+        }
+      }
+    }
+    // Filter by tags (支持ID或slug)
+    if (tags) {
+      const tagValues = tags.split(',');
+      const isNumeric = tagValues.every((val: string) => !isNaN(parseInt(val)));
+
+      if (isNumeric) {
+        const tagIds = tagValues.map((id: string) => parseInt(id));
+        countQuery += ` AND id IN (SELECT post_id FROM post_tags WHERE tag_id IN (${tagIds.map(() => '?').join(',')}))`;
+        countParams.push(...tagIds);
+      } else {
+        const slugPlaceholders = tagValues.map(() => '?').join(',');
+        const tagResult = await c.env.DB.prepare(
+          `SELECT id FROM tags WHERE slug IN (${slugPlaceholders})`
+        ).bind(...tagValues).all();
+
+        const tagIds = tagResult.results.map((tag: any) => tag.id);
+
+        if (tagIds.length > 0) {
+          countQuery += ` AND id IN (SELECT post_id FROM post_tags WHERE tag_id IN (${tagIds.map(() => '?').join(',')}))`;
+          countParams.push(...tagIds);
+        } else {
+          countQuery += ' AND 1=0';
+        }
+      }
     }
     if (search) {
       countQuery += ' AND (title LIKE ? OR content LIKE ?)';
@@ -80,7 +203,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
           .all();
         const tagIds = tagResult.results.map((r: any) => r.tag_id);
 
-        return formatPostResponse(post, c.env, categoryIds, tagIds);
+        return formatPostResponse(post, baseUrl, categoryIds, tagIds);
       })
     );
 
@@ -89,7 +212,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
       page,
       perPage,
       totalItems,
-      `${c.env.SITE_URL}/wp-json/wp/v2/posts`
+      `${baseUrl}/wp-json/wp/v2/posts`
     );
 
     return c.json(formattedPosts, 200, headers);
@@ -101,6 +224,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
 // GET /wp/v2/posts/:id - Get single post
 posts.get('/:id', optionalAuthMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     const post = await c.env.DB.prepare('SELECT * FROM posts WHERE id = ? AND post_type = ?')
@@ -130,7 +256,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       .bind(id)
       .run();
 
-    return c.json(formatPostResponse(post, c.env, categoryIds, tagIds));
+    return c.json(formatPostResponse(post, baseUrl, categoryIds, tagIds));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -139,10 +265,13 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
 // POST /wp/v2/posts - Create post
 posts.post('/', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
     const body = await c.req.json();
 
-    const { title, content, excerpt, slug, status, categories, tags, featured_image } = body;
+    const { title, content, excerpt, slug, status, categories, tags, featured_media, featured_image_url } = body;
 
     if (!title) {
       return createWPError('rest_invalid_param', 'Title is required.', 400);
@@ -158,20 +287,33 @@ posts.post('/', authMiddleware, async (c) => {
       );
     }
 
-    // Generate slug - only if slug is empty or not provided
-    let postSlug = (slug && slug.trim()) ? slug.trim() : generateSlug(title);
+    // Generate slug using AI if not provided
+    let postSlug: string;
+    if (slug && slug.trim()) {
+      postSlug = slug.trim();
+    } else {
+      // Use AI to generate slug
+      postSlug = await generateSlugWithAI(c.env, title);
+    }
 
     // Ensure slug is unique
     let slugExists = await c.env.DB.prepare('SELECT id FROM posts WHERE slug = ?')
       .bind(postSlug)
       .first();
     let counter = 1;
+    const baseSlug = postSlug;
     while (slugExists) {
-      postSlug = `${slug || generateSlug(title)}-${counter}`;
+      postSlug = `${baseSlug}-${counter}`;
       slugExists = await c.env.DB.prepare('SELECT id FROM posts WHERE slug = ?')
         .bind(postSlug)
         .first();
       counter++;
+    }
+
+    // Generate excerpt using AI if not provided
+    let postExcerpt = excerpt;
+    if (!postExcerpt && content) {
+      postExcerpt = await generateExcerptWithAI(c.env, title, content);
     }
 
     const now = new Date().toISOString();
@@ -179,18 +321,19 @@ posts.post('/', authMiddleware, async (c) => {
 
     // Insert post
     const result = await c.env.DB.prepare(
-      `INSERT INTO posts (title, content, excerpt, slug, status, post_type, author_id, featured_image, published_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO posts (title, content, excerpt, slug, status, post_type, author_id, featured_media_id, featured_image_url, published_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         title,
         content || '',
-        excerpt || '',
+        postExcerpt || '',
         postSlug,
         postStatus,
         'post',
         user.userId,
-        featured_image || null,
+        featured_media || null,
+        featured_image_url || null,
         publishedAt,
         now,
         now
@@ -234,10 +377,19 @@ posts.post('/', authMiddleware, async (c) => {
       .bind(postId)
       .first<Post>();
 
-    return c.json(
-      formatPostResponse(createdPost!, c.env, categories || [], tags || []),
-      201
-    );
+    const formattedPost = formatPostResponse(createdPost!, baseUrl, categories || [], tags || []);
+
+    // Trigger webhook for post creation
+    // Only send one event to avoid duplicate deployments for deploy hooks
+    if (postStatus === 'publish') {
+      // For published posts, send published event (most important for deploy hooks)
+      await sendWebhook(c.env, 'post.published', formattedPost);
+    } else {
+      // For drafts and other statuses, send created event
+      await sendWebhook(c.env, 'post.created', formattedPost);
+    }
+
+    return c.json(formattedPost, 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -246,6 +398,9 @@ posts.post('/', authMiddleware, async (c) => {
 // PUT /wp/v2/posts/:id - Update post
 posts.put('/:id', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
     const id = parseInt(c.req.param('id'));
 
@@ -268,7 +423,7 @@ posts.put('/:id', authMiddleware, async (c) => {
     }
 
     const body = await c.req.json();
-    const { title, content, excerpt, slug, status, categories, tags, featured_image } = body;
+    const { title, content, excerpt, slug, status, categories, tags, featured_media, featured_image_url } = body;
 
     // Check publish permission
     if (status === 'publish' && existingPost.status !== 'publish' && !canPublishPost(user)) {
@@ -300,11 +455,28 @@ posts.put('/:id', authMiddleware, async (c) => {
     if (excerpt !== undefined) {
       updates.push('excerpt = ?');
       params.push(excerpt);
+    } else if (excerpt === undefined && content !== undefined && title !== undefined) {
+      // Auto-generate excerpt using AI if content changed but excerpt not provided
+      const newExcerpt = await generateExcerptWithAI(c.env, title, content);
+      updates.push('excerpt = ?');
+      params.push(newExcerpt);
+    } else if (excerpt === undefined && content !== undefined) {
+      // Use existing title if title not provided
+      const newExcerpt = await generateExcerptWithAI(c.env, existingPost.title, content);
+      updates.push('excerpt = ?');
+      params.push(newExcerpt);
     }
 
     if (slug !== undefined) {
-      // If slug is provided and not empty, use it; otherwise generate from title
-      const newSlug = (slug && slug.trim()) ? slug.trim() : (title ? generateSlug(title) : existingPost.slug);
+      // If slug is provided and not empty, use it; otherwise generate from title using AI
+      let newSlug: string;
+      if (slug && slug.trim()) {
+        newSlug = slug.trim();
+      } else if (title) {
+        newSlug = await generateSlugWithAI(c.env, title);
+      } else {
+        newSlug = existingPost.slug;
+      }
       updates.push('slug = ?');
       params.push(newSlug);
     }
@@ -316,9 +488,14 @@ posts.put('/:id', authMiddleware, async (c) => {
       params.push(publishedAt);
     }
 
-    if (featured_image !== undefined) {
-      updates.push('featured_image = ?');
-      params.push(featured_image);
+    if (featured_media !== undefined) {
+      updates.push('featured_media_id = ?');
+      params.push(featured_media);
+    }
+
+    if (featured_image_url !== undefined) {
+      updates.push('featured_image_url = ?');
+      params.push(featured_image_url);
     }
 
     const updateQuery = `UPDATE posts SET ${updates.join(', ')} WHERE id = ?`;
@@ -402,7 +579,19 @@ posts.put('/:id', authMiddleware, async (c) => {
       .all();
     const tagIds = tagResult.results.map((r: any) => r.tag_id);
 
-    return c.json(formatPostResponse(updatedPost!, c.env, categoryIds, tagIds));
+    // Trigger webhook for post update
+    const formattedPost = formatPostResponse(updatedPost!, baseUrl, categoryIds, tagIds);
+
+    // Send webhook notifications
+    if (status === 'publish' && existingPost.status !== 'publish') {
+      // Post was just published
+      await sendWebhook(c.env, 'post.published', formattedPost);
+    } else {
+      // Regular update
+      await sendWebhook(c.env, 'post.updated', formattedPost);
+    }
+
+    return c.json(formattedPost);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -411,6 +600,9 @@ posts.put('/:id', authMiddleware, async (c) => {
 // DELETE /wp/v2/posts/:id - Delete post
 posts.delete('/:id', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
     const force = c.req.query('force') === 'true';
 
@@ -439,7 +631,12 @@ posts.delete('/:id', authMiddleware, async (c) => {
       await c.env.DB.prepare('DELETE FROM post_tags WHERE post_id = ?').bind(id).run();
       await c.env.DB.prepare('DELETE FROM post_meta WHERE post_id = ?').bind(id).run();
 
-      return c.json({ deleted: true, previous: formatPostResponse(post, c.env) });
+      const formattedPost = formatPostResponse(post, baseUrl);
+
+      // Trigger webhook for post deletion
+      await sendWebhook(c.env, 'post.deleted', formattedPost);
+
+      return c.json({ deleted: true, previous: formattedPost });
     } else {
       // Move to trash
       await c.env.DB.prepare('UPDATE posts SET status = ? WHERE id = ?').bind('trash', id).run();
@@ -448,7 +645,12 @@ posts.delete('/:id', authMiddleware, async (c) => {
         .bind(id)
         .first<Post>();
 
-      return c.json(formatPostResponse(trashedPost!, c.env));
+      const formattedPost = formatPostResponse(trashedPost!, baseUrl);
+
+      // Trigger webhook for post update (status changed to trash)
+      await sendWebhook(c.env, 'post.updated', formattedPost);
+
+      return c.json(formattedPost);
     }
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);

@@ -2,6 +2,7 @@
 export interface Env {
   DB: D1Database;
   MEDIA: R2Bucket;
+  AI: Ai;
   JWT_SECRET: string;
   ADMIN_EMAIL: string;
   SITE_NAME: string;
@@ -51,6 +52,8 @@ export interface Post {
   author_id: number;
   parent_id: number;
   featured_image: string | null;
+  featured_image_url: string | null;
+  featured_media_id: number | null;
   comment_status: 'open' | 'closed';
   comment_count: number;
   view_count: number;
@@ -82,6 +85,7 @@ export interface PostResponse {
   };
   author: number;
   featured_media: number;
+  featured_image_url?: string;
   comment_status: string;
   ping_status: string;
   sticky: boolean;
@@ -90,6 +94,8 @@ export interface PostResponse {
   meta: any[];
   categories: number[];
   tags: number[];
+  comment_count?: number;
+  view_count?: number;
   _links: any;
 }
 
@@ -214,9 +220,11 @@ export interface CommentResponse {
   id: number;
   post: number;
   parent: number;
-  author: number;
+  author: number; // user_id, 0 for guests
   author_name: string;
   author_url: string;
+  author_email?: string; // Only visible to admins
+  author_ip?: string; // Only visible to admins
   date: string;
   date_gmt: string;
   content: {

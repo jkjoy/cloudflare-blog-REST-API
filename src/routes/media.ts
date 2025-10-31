@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env, Media, JWTPayload } from '../types';
-import { formatMediaResponse, buildPaginationHeaders, createWPError } from '../utils';
+import { formatMediaResponse, buildPaginationHeaders, createWPError, getSiteSettings, normalizeBaseUrl } from '../utils';
 import { authMiddleware, requireRole } from '../auth';
 
 const media = new Hono<{ Bindings: Env }>();
@@ -8,6 +8,9 @@ const media = new Hono<{ Bindings: Env }>();
 // GET /wp/v2/media - List media
 media.get('/', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('per_page') || '10');
     const author = c.req.query('author');
@@ -58,7 +61,7 @@ media.get('/', authMiddleware, async (c) => {
     const totalItems = (countResult?.count as number) || 0;
 
     const formattedMedia = (result.results as Media[]).map((m) =>
-      formatMediaResponse(m, c.env)
+      formatMediaResponse(m, baseUrl)
     );
 
     // Add pagination headers
@@ -66,7 +69,7 @@ media.get('/', authMiddleware, async (c) => {
       page,
       perPage,
       totalItems,
-      `${c.env.SITE_URL}/wp-json/wp/v2/media`
+      `${baseUrl}/wp-json/wp/v2/media`
     );
 
     return c.json(formattedMedia, 200, headers);
@@ -78,6 +81,9 @@ media.get('/', authMiddleware, async (c) => {
 // GET /wp/v2/media/:id - Get single media
 media.get('/:id', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     const mediaItem = await c.env.DB.prepare('SELECT * FROM media WHERE id = ?')
@@ -88,7 +94,7 @@ media.get('/:id', async (c) => {
       return createWPError('rest_post_invalid_id', 'Invalid media ID.', 404);
     }
 
-    return c.json(formatMediaResponse(mediaItem, c.env));
+    return c.json(formatMediaResponse(mediaItem, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -97,6 +103,9 @@ media.get('/:id', async (c) => {
 // POST /wp/v2/media - Upload media
 media.post('/', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
 
     // Get the uploaded file from the request
@@ -149,7 +158,7 @@ media.post('/', authMiddleware, async (c) => {
 
     // Generate public URL
     // In production, you should configure a custom domain for your R2 bucket
-    const url = `${c.env.SITE_URL}/media/${r2Key}`;
+    const url = `${normalizeBaseUrl(baseUrl)}/media/${r2Key}`;
 
     // Determine file type and dimensions
     let fileType = 'file';
@@ -198,7 +207,7 @@ media.post('/', authMiddleware, async (c) => {
       .bind(mediaId)
       .first<Media>();
 
-    return c.json(formatMediaResponse(createdMedia!, c.env), 201);
+    return c.json(formatMediaResponse(createdMedia!, baseUrl), 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -207,6 +216,9 @@ media.post('/', authMiddleware, async (c) => {
 // PUT /wp/v2/media/:id - Update media
 media.put('/:id', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
     const id = parseInt(c.req.param('id'));
 
@@ -261,7 +273,7 @@ media.put('/:id', authMiddleware, async (c) => {
 
     // If no fields to update, return current media
     if (updates.length === 0) {
-      return c.json(formatMediaResponse(existingMedia, c.env));
+      return c.json(formatMediaResponse(existingMedia, baseUrl));
     }
 
     const updateQuery = `UPDATE media SET ${updates.join(', ')} WHERE id = ?`;
@@ -274,7 +286,7 @@ media.put('/:id', authMiddleware, async (c) => {
       .bind(id)
       .first<Media>();
 
-    return c.json(formatMediaResponse(updatedMedia!, c.env));
+    return c.json(formatMediaResponse(updatedMedia!, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -283,6 +295,9 @@ media.put('/:id', authMiddleware, async (c) => {
 // DELETE /wp/v2/media/:id - Delete media
 media.delete('/:id', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
     const id = parseInt(c.req.param('id'));
     const force = c.req.query('force') === 'true';
@@ -316,7 +331,7 @@ media.delete('/:id', authMiddleware, async (c) => {
       // Delete from database
       await c.env.DB.prepare('DELETE FROM media WHERE id = ?').bind(id).run();
 
-      return c.json({ deleted: true, previous: formatMediaResponse(mediaItem, c.env) });
+      return c.json({ deleted: true, previous: formatMediaResponse(mediaItem, baseUrl) });
     } else {
       return createWPError(
         'rest_trash_not_supported',

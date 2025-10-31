@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env, Tag, JWTPayload } from '../types';
-import { formatTagResponse, generateSlug, buildPaginationHeaders, createWPError } from '../utils';
+import { formatTagResponse, generateSlug, buildPaginationHeaders, createWPError, getSiteSettings } from '../utils';
 import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
 
 const tags = new Hono<{ Bindings: Env }>();
@@ -8,10 +8,16 @@ const tags = new Hono<{ Bindings: Env }>();
 // GET /wp/v2/tags - List tags
 tags.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('per_page') || '10');
     const search = c.req.query('search');
     const post = c.req.query('post');
+    const slug = c.req.query('slug');
+    const include = c.req.query('include');
+    const exclude = c.req.query('exclude');
     const orderby = c.req.query('orderby') || 'name';
     const order = c.req.query('order') || 'asc';
 
@@ -23,6 +29,27 @@ tags.get('/', async (c) => {
     if (search) {
       query += ' AND name LIKE ?';
       params.push(`%${search}%`);
+    }
+
+    if (slug) {
+      query += ' AND slug = ?';
+      params.push(slug);
+    }
+
+    if (include) {
+      const ids = include.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        query += ` AND id IN (${ids.map(() => '?').join(',')})`;
+        params.push(...ids);
+      }
+    }
+
+    if (exclude) {
+      const ids = exclude.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        query += ` AND id NOT IN (${ids.map(() => '?').join(',')})`;
+        params.push(...ids);
+      }
     }
 
     if (post) {
@@ -45,18 +72,36 @@ tags.get('/', async (c) => {
     const result = await c.env.DB.prepare(query).bind(...params).all();
 
     // Get total count
-    let countQuery = 'SELECT COUNT(*) as count FROM tags';
+    let countQuery = 'SELECT COUNT(*) as count FROM tags WHERE 1=1';
     const countParams: any[] = [];
     if (search) {
-      countQuery += ' WHERE name LIKE ?';
+      countQuery += ' AND name LIKE ?';
       countParams.push(`%${search}%`);
+    }
+    if (slug) {
+      countQuery += ' AND slug = ?';
+      countParams.push(slug);
+    }
+    if (include) {
+      const ids = include.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        countQuery += ` AND id IN (${ids.map(() => '?').join(',')})`;
+        countParams.push(...ids);
+      }
+    }
+    if (exclude) {
+      const ids = exclude.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        countQuery += ` AND id NOT IN (${ids.map(() => '?').join(',')})`;
+        countParams.push(...ids);
+      }
     }
 
     const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first();
     const totalItems = (countResult?.count as number) || 0;
 
     const formattedTags = (result.results as Tag[]).map((tag) =>
-      formatTagResponse(tag, c.env)
+      formatTagResponse(tag, baseUrl)
     );
 
     // Add pagination headers
@@ -64,7 +109,7 @@ tags.get('/', async (c) => {
       page,
       perPage,
       totalItems,
-      `${c.env.SITE_URL}/wp-json/wp/v2/tags`
+      `${baseUrl}/wp-json/wp/v2/tags`
     );
 
     return c.json(formattedTags, 200, headers);
@@ -76,6 +121,9 @@ tags.get('/', async (c) => {
 // GET /wp/v2/tags/:id - Get single tag
 tags.get('/:id', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     const tag = await c.env.DB.prepare('SELECT * FROM tags WHERE id = ?')
@@ -86,7 +134,7 @@ tags.get('/:id', async (c) => {
       return createWPError('rest_term_invalid', 'Term does not exist.', 404);
     }
 
-    return c.json(formatTagResponse(tag, c.env));
+    return c.json(formatTagResponse(tag, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -95,6 +143,9 @@ tags.get('/:id', async (c) => {
 // POST /wp/v2/tags - Create tag
 tags.post('/', authMiddleware, requireRole('administrator', 'editor', 'author'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const body = await c.req.json();
     const { name, description, slug } = body;
 
@@ -134,7 +185,7 @@ tags.post('/', authMiddleware, requireRole('administrator', 'editor', 'author'),
       .bind(tagId)
       .first<Tag>();
 
-    return c.json(formatTagResponse(createdTag!, c.env), 201);
+    return c.json(formatTagResponse(createdTag!, baseUrl), 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -143,6 +194,9 @@ tags.post('/', authMiddleware, requireRole('administrator', 'editor', 'author'),
 // PUT /wp/v2/tags/:id - Update tag
 tags.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     // Check if tag exists
@@ -178,7 +232,7 @@ tags.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async (
 
     // If no fields to update, return current tag
     if (updates.length === 0) {
-      return c.json(formatTagResponse(existingTag, c.env));
+      return c.json(formatTagResponse(existingTag, baseUrl));
     }
 
     const updateQuery = `UPDATE tags SET ${updates.join(', ')} WHERE id = ?`;
@@ -191,7 +245,7 @@ tags.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async (
       .bind(id)
       .first<Tag>();
 
-    return c.json(formatTagResponse(updatedTag!, c.env));
+    return c.json(formatTagResponse(updatedTag!, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -200,6 +254,9 @@ tags.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async (
 // DELETE /wp/v2/tags/:id - Delete tag
 tags.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
     const force = c.req.query('force') === 'true';
 
@@ -217,7 +274,7 @@ tags.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), asyn
       await c.env.DB.prepare('DELETE FROM post_tags WHERE tag_id = ?').bind(id).run();
       await c.env.DB.prepare('DELETE FROM tags WHERE id = ?').bind(id).run();
 
-      return c.json({ deleted: true, previous: formatTagResponse(tag, c.env) });
+      return c.json({ deleted: true, previous: formatTagResponse(tag, baseUrl) });
     } else {
       return createWPError(
         'rest_trash_not_supported',

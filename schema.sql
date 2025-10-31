@@ -28,13 +28,16 @@ CREATE TABLE IF NOT EXISTS posts (
     author_id INTEGER NOT NULL,
     parent_id INTEGER DEFAULT 0,
     featured_image TEXT,
+    featured_media_id INTEGER DEFAULT NULL,
+    featured_image_url TEXT DEFAULT NULL,
     comment_status TEXT DEFAULT 'open' CHECK(comment_status IN ('open', 'closed')),
     comment_count INTEGER DEFAULT 0,
     view_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     published_at TEXT,
-    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (featured_media_id) REFERENCES media(id) ON DELETE SET NULL
 );
 
 -- Categories table (Taxonomy)
@@ -121,6 +124,15 @@ CREATE TABLE IF NOT EXISTS options (
     autoload TEXT DEFAULT 'yes' CHECK(autoload IN ('yes', 'no'))
 );
 
+-- Site Settings table
+CREATE TABLE IF NOT EXISTS site_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setting_key TEXT NOT NULL UNIQUE,
+    setting_value TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Link Categories table
 CREATE TABLE IF NOT EXISTS link_categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,6 +160,22 @@ CREATE TABLE IF NOT EXISTS links (
     FOREIGN KEY (category_id) REFERENCES link_categories(id) ON DELETE SET DEFAULT
 );
 
+-- Moments table (社交媒体风格的动态/说说)
+-- Similar to Twitter/Weibo posts - short updates with optional media
+CREATE TABLE IF NOT EXISTS moments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    author_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'publish' CHECK(status IN ('publish', 'draft', 'trash')),
+    media_urls TEXT,  -- JSON array of media URLs
+    view_count INTEGER DEFAULT 0,
+    like_count INTEGER DEFAULT 0,
+    comment_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Meta tables for extensibility
 CREATE TABLE IF NOT EXISTS post_meta (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,15 +199,21 @@ CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 CREATE INDEX IF NOT EXISTS idx_posts_type ON posts(post_type);
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published_at);
+CREATE INDEX IF NOT EXISTS idx_posts_featured_media ON posts(featured_media_id);
+CREATE INDEX IF NOT EXISTS idx_posts_featured_image_url ON posts(featured_image_url);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_comments_status ON comments(status);
 CREATE INDEX IF NOT EXISTS idx_media_author ON media(author_id);
 CREATE INDEX IF NOT EXISTS idx_media_type ON media(mime_type);
 CREATE INDEX IF NOT EXISTS idx_post_meta_key ON post_meta(post_id, meta_key);
 CREATE INDEX IF NOT EXISTS idx_user_meta_key ON user_meta(user_id, meta_key);
+CREATE INDEX IF NOT EXISTS idx_site_settings_key ON site_settings(setting_key);
 CREATE INDEX IF NOT EXISTS idx_links_category ON links(category_id);
 CREATE INDEX IF NOT EXISTS idx_links_visible ON links(visible);
 CREATE INDEX IF NOT EXISTS idx_links_sort ON links(sort_order);
+CREATE INDEX IF NOT EXISTS idx_moments_author ON moments(author_id);
+CREATE INDEX IF NOT EXISTS idx_moments_status ON moments(status);
+CREATE INDEX IF NOT EXISTS idx_moments_created ON moments(created_at);
 
 -- Insert default options
 INSERT OR IGNORE INTO options (option_name, option_value, autoload) VALUES
@@ -198,3 +232,18 @@ VALUES ('Uncategorized', 'uncategorized', 'Default category');
 -- Insert default link category
 INSERT OR IGNORE INTO link_categories (name, slug, description)
 VALUES ('Friends', 'friends', 'Friendly links');
+
+-- Insert default site settings
+INSERT OR IGNORE INTO site_settings (setting_key, setting_value) VALUES
+('site_title', 'CFBlog'),
+('site_description', '基于 Cloudflare Workers + D1 + R2 构建的现代化博客系统'),
+('site_keywords', 'blog, cloudflare, workers, vue3, typescript'),
+('site_author', 'CFBlog'),
+('site_favicon', ''),
+('site_logo', ''),
+('site_icp', ''),
+('site_footer_text', '© 2024 CFBlog. Powered by Cloudflare Workers.'),
+('head_html', ''),
+('webhook_url', ''),
+('webhook_secret', ''),
+('webhook_events', 'post.created,post.updated,post.published,post.deleted,comment.created,comment.updated,comment.deleted');

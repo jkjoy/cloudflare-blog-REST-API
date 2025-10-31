@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env, Category, JWTPayload } from '../types';
-import { formatCategoryResponse, generateSlug, buildPaginationHeaders, createWPError } from '../utils';
+import { formatCategoryResponse, generateSlug, buildPaginationHeaders, createWPError, getSiteSettings } from '../utils';
 import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
 
 const categories = new Hono<{ Bindings: Env }>();
@@ -8,10 +8,16 @@ const categories = new Hono<{ Bindings: Env }>();
 // GET /wp/v2/categories - List categories
 categories.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('per_page') || '10');
     const search = c.req.query('search');
     const post = c.req.query('post');
+    const slug = c.req.query('slug');
+    const include = c.req.query('include');
+    const exclude = c.req.query('exclude');
     const orderby = c.req.query('orderby') || 'name';
     const order = c.req.query('order') || 'asc';
 
@@ -23,6 +29,27 @@ categories.get('/', async (c) => {
     if (search) {
       query += ' AND name LIKE ?';
       params.push(`%${search}%`);
+    }
+
+    if (slug) {
+      query += ' AND slug = ?';
+      params.push(slug);
+    }
+
+    if (include) {
+      const ids = include.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        query += ` AND id IN (${ids.map(() => '?').join(',')})`;
+        params.push(...ids);
+      }
+    }
+
+    if (exclude) {
+      const ids = exclude.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        query += ` AND id NOT IN (${ids.map(() => '?').join(',')})`;
+        params.push(...ids);
+      }
     }
 
     if (post) {
@@ -45,18 +72,36 @@ categories.get('/', async (c) => {
     const result = await c.env.DB.prepare(query).bind(...params).all();
 
     // Get total count
-    let countQuery = 'SELECT COUNT(*) as count FROM categories';
+    let countQuery = 'SELECT COUNT(*) as count FROM categories WHERE 1=1';
     const countParams: any[] = [];
     if (search) {
-      countQuery += ' WHERE name LIKE ?';
+      countQuery += ' AND name LIKE ?';
       countParams.push(`%${search}%`);
+    }
+    if (slug) {
+      countQuery += ' AND slug = ?';
+      countParams.push(slug);
+    }
+    if (include) {
+      const ids = include.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        countQuery += ` AND id IN (${ids.map(() => '?').join(',')})`;
+        countParams.push(...ids);
+      }
+    }
+    if (exclude) {
+      const ids = exclude.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      if (ids.length > 0) {
+        countQuery += ` AND id NOT IN (${ids.map(() => '?').join(',')})`;
+        countParams.push(...ids);
+      }
     }
 
     const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first();
     const totalItems = (countResult?.count as number) || 0;
 
     const formattedCategories = (result.results as Category[]).map((cat) =>
-      formatCategoryResponse(cat, c.env)
+      formatCategoryResponse(cat, baseUrl)
     );
 
     // Add pagination headers
@@ -64,7 +109,7 @@ categories.get('/', async (c) => {
       page,
       perPage,
       totalItems,
-      `${c.env.SITE_URL}/wp-json/wp/v2/categories`
+      `${baseUrl}/wp-json/wp/v2/categories`
     );
 
     return c.json(formattedCategories, 200, headers);
@@ -76,6 +121,9 @@ categories.get('/', async (c) => {
 // GET /wp/v2/categories/:id - Get single category
 categories.get('/:id', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     const category = await c.env.DB.prepare('SELECT * FROM categories WHERE id = ?')
@@ -86,7 +134,7 @@ categories.get('/:id', async (c) => {
       return createWPError('rest_term_invalid', 'Term does not exist.', 404);
     }
 
-    return c.json(formatCategoryResponse(category, c.env));
+    return c.json(formatCategoryResponse(category, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -95,6 +143,9 @@ categories.get('/:id', async (c) => {
 // POST /wp/v2/categories - Create category
 categories.post('/', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     // Debug logging
     const user = c.get('user') as JWTPayload | undefined;
     console.log('[DEBUG] Create category - User:', user);
@@ -138,7 +189,7 @@ categories.post('/', authMiddleware, requireRole('administrator', 'editor'), asy
       .bind(categoryId)
       .first<Category>();
 
-    return c.json(formatCategoryResponse(createdCategory!, c.env), 201);
+    return c.json(formatCategoryResponse(createdCategory!, baseUrl), 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -147,6 +198,9 @@ categories.post('/', authMiddleware, requireRole('administrator', 'editor'), asy
 // PUT /wp/v2/categories/:id - Update category
 categories.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
 
     // Check if category exists
@@ -187,7 +241,7 @@ categories.put('/:id', authMiddleware, requireRole('administrator', 'editor'), a
 
     // If no fields to update, return current category
     if (updates.length === 0) {
-      return c.json(formatCategoryResponse(existingCategory, c.env));
+      return c.json(formatCategoryResponse(existingCategory, baseUrl));
     }
 
     const updateQuery = `UPDATE categories SET ${updates.join(', ')} WHERE id = ?`;
@@ -200,7 +254,7 @@ categories.put('/:id', authMiddleware, requireRole('administrator', 'editor'), a
       .bind(id)
       .first<Category>();
 
-    return c.json(formatCategoryResponse(updatedCategory!, c.env));
+    return c.json(formatCategoryResponse(updatedCategory!, baseUrl));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -209,6 +263,9 @@ categories.put('/:id', authMiddleware, requireRole('administrator', 'editor'), a
 // DELETE /wp/v2/categories/:id - Delete category
 categories.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
     const force = c.req.query('force') === 'true';
 
@@ -240,7 +297,7 @@ categories.delete('/:id', authMiddleware, requireRole('administrator', 'editor')
 
       await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
 
-      return c.json({ deleted: true, previous: formatCategoryResponse(category, c.env) });
+      return c.json({ deleted: true, previous: formatCategoryResponse(category, baseUrl) });
     } else {
       return createWPError(
         'rest_trash_not_supported',

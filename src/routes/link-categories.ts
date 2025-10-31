@@ -1,13 +1,16 @@
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { authMiddleware } from '../auth';
-import { generateSlug } from '../utils';
+import { generateSlug, getSiteSettings } from '../utils';
 
 const linkCategories = new Hono<{ Bindings: Env }>();
 
 // Get all link categories
 linkCategories.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const { results } = await c.env.DB.prepare(`
       SELECT * FROM link_categories ORDER BY name ASC
     `).all();
@@ -19,8 +22,8 @@ linkCategories.get('/', async (c) => {
       description: cat.description || '',
       count: cat.count || 0,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/link-categories/${cat.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/link-categories` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/link-categories/${cat.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/link-categories` }]
       }
     })));
   } catch (error: any) {
@@ -34,6 +37,9 @@ linkCategories.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const category = await c.env.DB.prepare(`
       SELECT * FROM link_categories WHERE id = ?
     `).bind(id).first();
@@ -49,8 +55,8 @@ linkCategories.get('/:id', async (c) => {
       description: category.description || '',
       count: category.count || 0,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/link-categories/${category.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/link-categories` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/link-categories/${category.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/link-categories` }]
       }
     });
   } catch (error: any) {
@@ -67,6 +73,9 @@ linkCategories.post('/', authMiddleware, async (c) => {
   }
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const { name, slug, description } = await c.req.json();
 
     if (!name) {
@@ -91,7 +100,7 @@ linkCategories.post('/', authMiddleware, async (c) => {
       description: newCategory.description || '',
       count: 0,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/link-categories/${newCategory.id}` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/link-categories/${newCategory.id}` }]
       }
     }, 201);
   } catch (error: any) {

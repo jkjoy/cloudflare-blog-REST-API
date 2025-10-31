@@ -1,13 +1,16 @@
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { authMiddleware } from '../auth';
-import { generateSlug } from '../utils';
+import { generateSlug, getSiteSettings } from '../utils';
 
 const pages = new Hono<{ Bindings: Env }>();
 
 // Get all pages
 pages.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const url = new URL(c.req.url);
     const perPage = parseInt(url.searchParams.get('per_page') || '20');
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -68,8 +71,8 @@ pages.get('/', async (c) => {
       comment_status: p.comment_status,
       parent: p.parent_id || 0,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/pages/${p.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/pages` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/pages/${p.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/pages` }]
       }
     })));
   } catch (error: any) {
@@ -83,6 +86,9 @@ pages.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = await c.env.DB.prepare(`
       SELECT p.*, u.username as author_name
       FROM posts p
@@ -116,8 +122,8 @@ pages.get('/:id', async (c) => {
       comment_status: page.comment_status,
       parent: page.parent_id || 0,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/pages/${page.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/pages` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/pages/${page.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/pages` }]
       }
     });
   } catch (error: any) {
@@ -131,6 +137,9 @@ pages.post('/', authMiddleware, async (c) => {
   const user = c.get('user');
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const { title, content, excerpt, slug, status, parent, comment_status } = await c.req.json();
 
     if (!title) {
@@ -213,6 +222,9 @@ pages.put('/:id', authMiddleware, async (c) => {
   const id = parseInt(c.req.param('id'));
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const { title, content, excerpt, slug, status, parent, comment_status } = await c.req.json();
 
     const existingPage = await c.env.DB.prepare(`
@@ -323,6 +335,9 @@ pages.delete('/:id', authMiddleware, async (c) => {
   const force = c.req.query('force') === 'true';
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const page = await c.env.DB.prepare(`
       SELECT * FROM posts WHERE id = ? AND post_type = 'page'
     `).bind(id).first();

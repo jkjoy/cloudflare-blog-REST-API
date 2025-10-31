@@ -1,12 +1,16 @@
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { authMiddleware } from '../auth';
+import { getSiteSettings } from '../utils';
 
 const links = new Hono<{ Bindings: Env }>();
 
 // Get all links
 links.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const url = new URL(c.req.url);
     const perPage = parseInt(url.searchParams.get('per_page') || '50');
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -64,8 +68,8 @@ links.get('/', async (c) => {
       created_at: link.created_at,
       updated_at: link.updated_at,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/links/${link.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/links` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/links/${link.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/links` }]
       }
     })));
   } catch (error: any) {
@@ -79,6 +83,9 @@ links.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
 
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const link = await c.env.DB.prepare(`
       SELECT l.*, lc.name as category_name, lc.slug as category_slug
       FROM links l
@@ -108,8 +115,8 @@ links.get('/:id', async (c) => {
       created_at: link.created_at,
       updated_at: link.updated_at,
       _links: {
-        self: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/links/${link.id}` }],
-        collection: [{ href: `${c.env.SITE_URL}/wp-json/wp/v2/links` }]
+        self: [{ href: `${baseUrl}/wp-json/wp/v2/links/${link.id}` }],
+        collection: [{ href: `${baseUrl}/wp-json/wp/v2/links` }]
       }
     });
   } catch (error: any) {

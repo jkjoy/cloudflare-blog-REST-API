@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { Env } from './types';
+import { getSiteSettings } from './utils';
 import posts from './routes/posts';
 import categories from './routes/categories';
 import tags from './routes/tags';
@@ -10,6 +11,8 @@ import links from './routes/links';
 import linkCategories from './routes/link-categories';
 import comments from './routes/comments';
 import pages from './routes/pages';
+import settings from './routes/settings';
+import moments from './routes/moments';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -23,16 +26,275 @@ app.use('*', cors({
   credentials: true,
 }));
 
-// Root endpoint
-app.get('/', (c) => {
+// Root endpoint - Simple landing page
+app.get('/', async (c) => {
+  const siteSettings = await getSiteSettings(c.env);
+  const apiUrl = siteSettings.site_url || 'http://localhost:8787';
+
+  return c.html(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${siteSettings.site_title || 'CFBlog'} - API Server</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 50px;
+      max-width: 600px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 {
+      font-size: 36px;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+    .subtitle {
+      font-size: 18px;
+      color: #7f8c8d;
+      margin-bottom: 40px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      border-radius: 8px;
+      padding: 15px 25px;
+      margin: 20px 0;
+      font-weight: 600;
+      color: #2e7d32;
+    }
+    .status.checking {
+      background: #fff3e0;
+      border-color: #ff9800;
+      color: #e65100;
+    }
+    .status.error {
+      background: #ffebee;
+      border-color: #f44336;
+      color: #c62828;
+    }
+    .indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #4caf50;
+      animation: pulse 2s infinite;
+    }
+    .status.checking .indicator {
+      background: #ff9800;
+    }
+    .status.error .indicator {
+      background: #f44336;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .button-group {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 30px;
+      flex-wrap: wrap;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 30px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .button:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .button.secondary {
+      background: #ecf0f1;
+      color: #2c3e50;
+    }
+    .button.secondary:hover {
+      background: #bdc3c7;
+    }
+    .info {
+      margin-top: 40px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      text-align: left;
+    }
+    .info h3 {
+      color: #2c3e50;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .info-item:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #666;
+    }
+    .info-value {
+      color: #2c3e50;
+      font-family: 'Courier New', monospace;
+    }
+    .footer {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      color: #95a5a6;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>${siteSettings.site_title || 'CFBlog'}</h1>
+    <p class="subtitle">${siteSettings.site_description || 'WordPress-like Headless CMS'}</p>
+
+    <div id="status" class="status checking">
+      <span class="indicator"></span>
+      <span id="status-text">Checking API status...</span>
+    </div>
+
+    <div class="button-group">
+      <a href="/wp-admin" class="button">Go to Dashboard</a>
+      <a href="/wp-json/" class="button secondary">View API Info</a>
+    </div>
+
+    <div class="info">
+      <h3>API Endpoints</h3>
+      <div class="info-item">
+        <span class="info-label">API Root:</span>
+        <span class="info-value">/wp-json/</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Posts:</span>
+        <span class="info-value">/wp-json/wp/v2/posts</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Categories:</span>
+        <span class="info-value">/wp-json/wp/v2/categories</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Tags:</span>
+        <span class="info-value">/wp-json/wp/v2/tags</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Media:</span>
+        <span class="info-value">/wp-json/wp/v2/media</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Dashboard:</span>
+        <span class="info-value">/wp-admin</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      Powered by Cloudflare Workers + D1 + R2
+    </div>
+  </div>
+
+  <script>
+    // Check API status
+    async function checkApiStatus() {
+      const statusEl = document.getElementById('status');
+      const statusTextEl = document.getElementById('status-text');
+
+      try {
+        const response = await fetch('/wp-json/');
+        if (response.ok) {
+          const data = await response.json();
+          statusEl.className = 'status';
+          statusTextEl.textContent = 'API is online and ready';
+        } else {
+          throw new Error('API returned error');
+        }
+      } catch (error) {
+        statusEl.className = 'status error';
+        statusTextEl.textContent = 'API connection failed';
+      }
+    }
+
+    // Run check on load
+    checkApiStatus();
+
+    // Recheck every 30 seconds
+    setInterval(checkApiStatus, 30000);
+  </script>
+</body>
+</html>
+  `);
+});
+
+// WordPress REST API root - Discovery endpoint
+app.get('/wp-json', async (c) => {
+  const siteSettings = await getSiteSettings(c.env);
   return c.json({
-    name: c.env.SITE_NAME || 'CFBlog',
-    description: 'WordPress-like headless CMS powered by Cloudflare Workers',
-    url: c.env.SITE_URL,
+    name: siteSettings.site_title || 'CFBlog',
+    description: siteSettings.site_description || 'WordPress-like headless CMS powered by Cloudflare Workers',
+    url: siteSettings.site_url || 'http://localhost:8787',
+    home: siteSettings.site_url || 'http://localhost:8787',
+    gmt_offset: 0,
+    timezone_string: 'UTC',
     namespaces: ['wp/v2'],
+    authentication: {
+      oauth1: false,
+      oauth2: false,
+      jwt: true
+    },
     routes: {
       '/wp-json/': {
-        methods: ['GET']
+        namespace: '',
+        methods: ['GET'],
+        endpoints: [
+          {
+            methods: ['GET'],
+            args: {
+              context: {
+                default: 'view',
+                required: false
+              }
+            }
+          }
+        ],
+        _links: {
+          self: `${siteSettings.site_url || 'http://localhost:8787'}/wp-json/`
+        }
       },
       '/wp-json/wp/v2': {
         methods: ['GET']
@@ -41,6 +303,12 @@ app.get('/', (c) => {
         methods: ['GET', 'POST']
       },
       '/wp-json/wp/v2/posts/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/pages': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/pages/(?P<id>[\\d]+)': {
         methods: ['GET', 'PUT', 'DELETE']
       },
       '/wp-json/wp/v2/categories': {
@@ -66,18 +334,40 @@ app.get('/', (c) => {
       },
       '/wp-json/wp/v2/users/(?P<id>[\\d]+)': {
         methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/links': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/links/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/link-categories': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/link-categories/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/comments': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/comments/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/settings': {
+        methods: ['GET', 'PUT']
       }
     }
   });
 });
 
-// WordPress REST API namespace info
-app.get('/wp-json', (c) => {
+// WordPress REST API root with trailing slash (alias)
+app.get('/wp-json/', async (c) => {
+  const siteSettings = await getSiteSettings(c.env);
   return c.json({
-    name: c.env.SITE_NAME || 'CFBlog',
-    description: 'WordPress-like headless CMS',
-    url: c.env.SITE_URL,
-    home: c.env.SITE_URL,
+    name: siteSettings.site_title || 'CFBlog',
+    description: siteSettings.site_description || 'WordPress-like headless CMS powered by Cloudflare Workers',
+    url: siteSettings.site_url || 'http://localhost:8787',
+    home: siteSettings.site_url || 'http://localhost:8787',
     gmt_offset: 0,
     timezone_string: 'UTC',
     namespaces: ['wp/v2'],
@@ -102,8 +392,68 @@ app.get('/wp-json', (c) => {
           }
         ],
         _links: {
-          self: `${c.env.SITE_URL}/wp-json/`
+          self: `${siteSettings.site_url || 'http://localhost:8787'}/wp-json/`
         }
+      },
+      '/wp-json/wp/v2': {
+        methods: ['GET']
+      },
+      '/wp-json/wp/v2/posts': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/posts/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/pages': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/pages/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/categories': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/categories/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/tags': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/tags/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/media': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/media/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/users': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/users/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/links': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/links/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/link-categories': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/link-categories/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/comments': {
+        methods: ['GET', 'POST']
+      },
+      '/wp-json/wp/v2/comments/(?P<id>[\\d]+)': {
+        methods: ['GET', 'PUT', 'DELETE']
+      },
+      '/wp-json/wp/v2/settings': {
+        methods: ['GET', 'PUT']
       }
     }
   });
@@ -152,6 +502,8 @@ app.route('/wp-json/wp/v2/users', users);
 app.route('/wp-json/wp/v2/links', links);
 app.route('/wp-json/wp/v2/link-categories', linkCategories);
 app.route('/wp-json/wp/v2/comments', comments);
+app.route('/wp-json/wp/v2/settings', settings);
+app.route('/wp-json/wp/v2/moments', moments);
 
 // Serve media files from R2
 app.get('/media/*', async (c) => {
@@ -558,12 +910,14 @@ app.get('/wp-admin', (c) => {
       '/': showDashboard,
       '/posts': showPosts,
       '/pages': showPages,
+      '/moments': showMoments,
       '/categories': showCategories,
       '/tags': showTags,
       '/media': showMedia,
       '/users': showUsers,
       '/links': showLinks,
       '/comments': showComments,
+      '/settings': showSettings,
     };
 
     function navigate(path) {
@@ -909,6 +1263,11 @@ app.get('/wp-admin', (c) => {
               <textarea name="excerpt" style="min-height: 100px;"></textarea>
             </div>
             <div class="form-group">
+              <label>特色图片 URL</label>
+              <input type="url" name="featured_image_url" placeholder="https://example.com/image.jpg">
+              <small style="color: #646970; display: block; margin-top: 5px;">直接输入图片URL地址作为特色图片</small>
+            </div>
+            <div class="form-group">
               <label>Status</label>
               <select name="status">
                 <option value="draft">Draft</option>
@@ -986,6 +1345,12 @@ app.get('/wp-admin', (c) => {
             postData.slug = slug.trim();
           }
 
+          // Include featured_image_url if provided
+          const featuredImageUrl = formData.get('featured_image_url');
+          if (featuredImageUrl && featuredImageUrl.trim()) {
+            postData.featured_image_url = featuredImageUrl.trim();
+          }
+
           const response = await fetch(API_BASE + '/posts', {
             method: 'POST',
             headers: {
@@ -1040,6 +1405,11 @@ app.get('/wp-admin', (c) => {
             <div class="form-group">
               <label>Excerpt</label>
               <textarea name="excerpt" style="min-height: 100px;">\${post.excerpt.rendered}</textarea>
+            </div>
+            <div class="form-group">
+              <label>特色图片 URL</label>
+              <input type="url" name="featured_image_url" value="\${post.featured_image_url || ''}" placeholder="https://example.com/image.jpg">
+              <small style="color: #646970; display: block; margin-top: 5px;">直接输入图片URL地址作为特色图片</small>
             </div>
             <div class="form-group">
               <label>Status</label>
@@ -1120,6 +1490,12 @@ app.get('/wp-admin', (c) => {
           const slug = formData.get('slug');
           if (slug && slug.trim()) {
             postData.slug = slug.trim();
+          }
+
+          // Include featured_image_url if provided
+          const featuredImageUrl = formData.get('featured_image_url');
+          if (featuredImageUrl && featuredImageUrl.trim()) {
+            postData.featured_image_url = featuredImageUrl.trim();
           }
 
           const response = await fetch(API_BASE + '/posts/' + id, {
@@ -2617,12 +2993,14 @@ app.get('/wp-admin', (c) => {
             <li><a href="#" data-route="/" class="active">Dashboard</a></li>
             <li><a href="#" data-route="/posts">Posts</a></li>
             <li><a href="#" data-route="/pages">Pages</a></li>
+            <li><a href="#" data-route="/moments">Moments</a></li>
             <li><a href="#" data-route="/categories">Categories</a></li>
             <li><a href="#" data-route="/tags">Tags</a></li>
             <li><a href="#" data-route="/media">Media</a></li>
             <li><a href="#" data-route="/links">Links</a></li>
             <li><a href="#" data-route="/comments">Comments</a></li>
             <li><a href="#" data-route="/users">Users</a></li>
+            <li><a href="#" data-route="/settings">Settings</a></li>
           </ul>
         </div>
         <div class="main-content">
@@ -2656,9 +3034,9 @@ app.get('/wp-admin', (c) => {
           <h2>All Comments</h2>
           <div>
             <select id="comment-status-filter" style="padding: 8px; margin-right: 10px;">
-              <option value="all">All</option>
+              <option value="all" selected>All</option>
               <option value="approved">Approved</option>
-              <option value="pending" selected>Pending</option>
+              <option value="pending">Pending</option>
               <option value="spam">Spam</option>
               <option value="trash">Trash</option>
             </select>
@@ -2671,7 +3049,7 @@ app.get('/wp-admin', (c) => {
         loadCommentsList(e.target.value);
       });
 
-      await loadCommentsList('pending');
+      await loadCommentsList('all');
     }
 
     async function loadCommentsList(status = 'all') {
@@ -2685,6 +3063,47 @@ app.get('/wp-admin', (c) => {
         if (comments.length === 0) {
           container.innerHTML = '<div class="empty-state">No comments found.</div>';
           return;
+        }
+
+        // Recursive function to render comment and its children
+        function renderComment(comment, depth = 0) {
+          const indent = depth * 30; // 30px indent per level
+          const commentHtml = \`
+            <tr style="background: \${depth > 0 ? '#f6f7f7' : 'white'};">
+              <td style="padding-left: \${indent + 10}px;">
+                \${depth > 0 ? '<span style="color: #2271b1; margin-right: 5px;">↳</span>' : ''}
+                <strong>\${comment.author_name}</strong><br>
+                <small style="color: #646970;">\${comment.author_email || 'No email'}</small>
+              </td>
+              <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                \${comment.content.rendered.substring(0, 100)}...
+              </td>
+              <td>\${comment.post_title || 'N/A'}</td>
+              <td>
+                <span style="padding: 3px 8px; background: \${
+                  comment.status === 'approved' ? '#00a32a' :
+                  comment.status === 'pending' ? '#dba617' :
+                  comment.status === 'spam' ? '#d63638' : '#646970'
+                }; color: white; border-radius: 3px; font-size: 12px;">
+                  \${comment.status}
+                </span>
+              </td>
+              <td>\${new Date(comment.date).toLocaleDateString()}</td>
+              <td class="actions">
+                \${comment.status !== 'approved' ? \`<a href="#" class="action-link" onclick="approveComment(\${comment.id}); return false;">Approve</a>\` : ''}
+                \${comment.status !== 'spam' ? \`<a href="#" class="action-link" onclick="markAsSpam(\${comment.id}); return false;">Spam</a>\` : ''}
+                <a href="#" class="action-link" onclick="editComment(\${comment.id}); return false;">Edit</a>
+                <a href="#" class="action-link delete" onclick="deleteComment(\${comment.id}); return false;">Delete</a>
+              </td>
+            </tr>
+          \`;
+
+          let childrenHtml = '';
+          if (comment.children && comment.children.length > 0) {
+            childrenHtml = comment.children.map(child => renderComment(child, depth + 1)).join('');
+          }
+
+          return commentHtml + childrenHtml;
         }
 
         container.innerHTML = \`
@@ -2701,34 +3120,7 @@ app.get('/wp-admin', (c) => {
                 </tr>
               </thead>
               <tbody>
-                \${comments.map(comment => \`
-                  <tr>
-                    <td>
-                      <strong>\${comment.author_name}</strong><br>
-                      <small style="color: #646970;">\${comment.author_email}</small>
-                    </td>
-                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
-                      \${comment.content.rendered.substring(0, 100)}...
-                    </td>
-                    <td>\${comment.post_title || 'N/A'}</td>
-                    <td>
-                      <span style="padding: 3px 8px; background: \${
-                        comment.status === 'approved' ? '#00a32a' :
-                        comment.status === 'pending' ? '#dba617' :
-                        comment.status === 'spam' ? '#d63638' : '#646970'
-                      }; color: white; border-radius: 3px; font-size: 12px;">
-                        \${comment.status}
-                      </span>
-                    </td>
-                    <td>\${new Date(comment.date).toLocaleDateString()}</td>
-                    <td class="actions">
-                      \${comment.status !== 'approved' ? \`<a href="#" class="action-link" onclick="approveComment(\${comment.id}); return false;">Approve</a>\` : ''}
-                      \${comment.status !== 'spam' ? \`<a href="#" class="action-link" onclick="markAsSpam(\${comment.id}); return false;">Spam</a>\` : ''}
-                      <a href="#" class="action-link" onclick="editComment(\${comment.id}); return false;">Edit</a>
-                      <a href="#" class="action-link delete" onclick="deleteComment(\${comment.id}); return false;">Delete</a>
-                    </td>
-                  </tr>
-                \`).join('')}
+                \${comments.map(comment => renderComment(comment)).join('')}
               </tbody>
             </table>
           </div>
@@ -3144,6 +3536,558 @@ app.get('/wp-admin', (c) => {
         console.error('Failed to delete page:', error);
       }
     };
+
+    // Moments Management
+    async function showMoments() {
+      renderLayout('Moments');
+      const content = document.querySelector('.content-area');
+
+      content.innerHTML = \`
+        <div class="page-header">
+          <h2>All Moments</h2>
+          <button class="button" onclick="showCreateMomentModal()">Add New Moment</button>
+        </div>
+        <div id="moments-list"></div>
+      \`;
+
+      await loadMomentsList();
+    }
+
+    async function loadMomentsList() {
+      try {
+        const response = await fetch(API_BASE + '/moments?per_page=50&status=all', {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error:', response.status, errorText);
+          const container = document.getElementById('moments-list');
+          container.innerHTML = '<div class="error-message">Failed to load moments. Please check if the moments table exists in the database.</div>';
+          return;
+        }
+
+        const moments = await response.json();
+
+        const container = document.getElementById('moments-list');
+        if (!moments || !Array.isArray(moments) || moments.length === 0) {
+          container.innerHTML = '<div class="empty-state">No moments yet. Share your first moment!</div>';
+          return;
+        }
+
+        container.innerHTML = \`
+          <div style="display: grid; gap: 20px; margin-top: 20px;">
+            \${moments.map(moment => \`
+              <div style="background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                      <img src="\${moment.author_avatar}" alt="\${moment.author_name}" style="width: 32px; height: 32px; border-radius: 50%;">
+                      <div>
+                        <strong>\${moment.author_name}</strong>
+                        <div style="font-size: 12px; color: #646970;">\${new Date(moment.date).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <div style="margin-bottom: 10px; white-space: pre-wrap;">\${moment.content.rendered}</div>
+                    \${moment.media_urls && moment.media_urls.length > 0 ? \`
+                      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0;">
+                        \${moment.media_urls.map(url => \`
+                          <img src="\${url}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                        \`).join('')}
+                      </div>
+                    \` : ''}
+                    <div style="font-size: 13px; color: #646970; margin-top: 10px;">
+                      <span style="margin-right: 15px;">👁️ \${moment.view_count} views</span>
+                      <span style="margin-right: 15px;">❤️ \${moment.like_count} likes</span>
+                      <span>💬 \${moment.comment_count} comments</span>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <a href="#" class="action-link" onclick="editMoment(\${moment.id}); return false;">Edit</a>
+                    <a href="#" class="action-link delete" onclick="deleteMoment(\${moment.id}); return false;">Delete</a>
+                  </div>
+                </div>
+              </div>
+            \`).join('')}
+          </div>
+        \`;
+      } catch (error) {
+        console.error('Failed to load moments:', error);
+      }
+    }
+
+    window.showCreateMomentModal = function() {
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = \`
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>Create New Moment</h2>
+            <button class="close-button" onclick="this.closest('.modal').remove()">&times;</button>
+          </div>
+          <form id="create-moment-form">
+            <div class="form-group">
+              <label>Content *</label>
+              <textarea name="content" required style="min-height: 150px;" placeholder="What's on your mind?"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Media URLs (one per line)</label>
+              <textarea id="media-urls-input" name="media_urls" style="min-height: 100px;" placeholder="https://example.com/image1.jpg
+https://example.com/image2.jpg"></textarea>
+              <small style="color: #646970; display: block; margin-top: 5px;">Enter image URLs, one per line. Or use the media library below.</small>
+            </div>
+            <div style="margin-bottom: 15px;">
+              <button type="button" class="button button-secondary" onclick="openMediaLibraryForMoment('create')">Select from Media Library</button>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select name="status">
+                <option value="publish">Publish</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+            <button type="submit" class="button" style="width: 100%;">Create Moment</button>
+          </form>
+        </div>
+      \`;
+      document.body.appendChild(modal);
+
+      document.getElementById('create-moment-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        // Parse media URLs
+        const mediaUrlsText = formData.get('media_urls') || '';
+        const mediaUrls = mediaUrlsText
+          .split('\\n')
+          .map(url => url.trim())
+          .filter(url => url.length > 0);
+
+        try {
+          const response = await fetch(API_BASE + '/moments', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + authToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              content: formData.get('content'),
+              status: formData.get('status'),
+              media_urls: mediaUrls
+            })
+          });
+
+          if (response.ok) {
+            modal.remove();
+            await loadMomentsList();
+          }
+        } catch (error) {
+          console.error('Failed to create moment:', error);
+        }
+      });
+    };
+
+    window.editMoment = async function(id) {
+      const moment = await fetch(API_BASE + '/moments/' + id, {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      }).then(r => r.json());
+
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = \`
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>Edit Moment</h2>
+            <button class="close-button" onclick="this.closest('.modal').remove()">&times;</button>
+          </div>
+          <form id="edit-moment-form">
+            <div class="form-group">
+              <label>Content *</label>
+              <textarea name="content" required style="min-height: 150px;">\${moment.content.rendered}</textarea>
+            </div>
+            <div class="form-group">
+              <label>Media URLs (one per line)</label>
+              <textarea id="media-urls-edit-input" name="media_urls" style="min-height: 100px;">\${moment.media_urls ? moment.media_urls.join('\\n') : ''}</textarea>
+              <small style="color: #646970; display: block; margin-top: 5px;">Enter image URLs, one per line.</small>
+            </div>
+            <div style="margin-bottom: 15px;">
+              <button type="button" class="button button-secondary" onclick="openMediaLibraryForMoment('edit', \${id})">Select from Media Library</button>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select name="status">
+                <option value="publish" \${moment.status === 'publish' ? 'selected' : ''}>Publish</option>
+                <option value="draft" \${moment.status === 'draft' ? 'selected' : ''}>Draft</option>
+              </select>
+            </div>
+            <button type="submit" class="button" style="width: 100%;">Update Moment</button>
+          </form>
+        </div>
+      \`;
+      document.body.appendChild(modal);
+
+      document.getElementById('edit-moment-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        // Parse media URLs
+        const mediaUrlsText = formData.get('media_urls') || '';
+        const mediaUrls = mediaUrlsText
+          .split('\\n')
+          .map(url => url.trim())
+          .filter(url => url.length > 0);
+
+        try {
+          const response = await fetch(API_BASE + '/moments/' + id, {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'Bearer ' + authToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              content: formData.get('content'),
+              status: formData.get('status'),
+              media_urls: mediaUrls
+            })
+          });
+
+          if (response.ok) {
+            modal.remove();
+            await loadMomentsList();
+          }
+        } catch (error) {
+          console.error('Failed to update moment:', error);
+        }
+      });
+    };
+
+    window.deleteMoment = async function(id) {
+      if (!confirm('Are you sure you want to delete this moment?')) return;
+
+      try {
+        await fetch(API_BASE + '/moments/' + id + '?force=true', {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        await loadMomentsList();
+      } catch (error) {
+        console.error('Failed to delete moment:', error);
+      }
+    };
+
+    window.openMediaLibraryForMoment = function(mode, momentId) {
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = \`
+        <div class="modal-content" style="max-width: 900px;">
+          <div class="modal-header">
+            <h2>Select Media</h2>
+            <button class="close-button" onclick="this.closest('.modal').remove()">&times;</button>
+          </div>
+          <div id="moment-media-library-grid" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+      \`;
+      document.body.appendChild(modal);
+
+      loadMediaLibraryForMoment(mode, momentId);
+    };
+
+    async function loadMediaLibraryForMoment(mode, momentId) {
+      try {
+        const response = await fetch(API_BASE + '/media?per_page=50', {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        const mediaItems = await response.json();
+
+        const container = document.getElementById('moment-media-library-grid');
+        if (mediaItems.length === 0) {
+          container.innerHTML = '<div class="empty-state">No media files yet.</div>';
+          return;
+        }
+
+        container.innerHTML = \`
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+            \${mediaItems.map(media => \`
+              <div class="media-item" style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden; cursor: pointer; transition: border-color 0.2s;" onclick="insertMediaIntoMoment('\${media.source_url}', '\${mode}')" onmouseover="this.style.borderColor='#2271b1'" onmouseout="this.style.borderColor='#ddd'">
+                <div style="height: 120px; background: #f0f0f1; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                  \${media.media_type === 'image'
+                    ? \`<img src="\${media.source_url}" alt="\${media.alt_text}" style="max-width: 100%; max-height: 100%; object-fit: cover;">\`
+                    : \`<div style="padding: 10px; text-align: center; font-size: 11px; color: #646970;">\${media.mime_type}</div>\`
+                  }
+                </div>
+                <div style="padding: 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="\${media.title.rendered}">\${media.title.rendered}</div>
+              </div>
+            \`).join('')}
+          </div>
+        \`;
+      } catch (error) {
+        console.error('Failed to load media library:', error);
+      }
+    }
+
+    window.insertMediaIntoMoment = function(url, mode) {
+      const textareaId = mode === 'edit' ? 'media-urls-edit-input' : 'media-urls-input';
+      const textarea = document.getElementById(textareaId);
+
+      if (textarea) {
+        const currentValue = textarea.value.trim();
+        textarea.value = currentValue ? currentValue + '\\n' + url : url;
+      }
+
+      // Close the media library modal
+      const mediaModals = document.querySelectorAll('.modal');
+      mediaModals.forEach(modal => {
+        const header = modal.querySelector('.modal-header h2');
+        if (header && header.textContent === 'Select Media') {
+          modal.remove();
+        }
+      });
+    };
+
+    // Settings Management
+    async function showSettings() {
+      renderLayout('Site Settings');
+      const content = document.querySelector('.content-area');
+
+      content.innerHTML = \`
+        <div class="page-header">
+          <h2>Site Settings</h2>
+        </div>
+        <div id="settings-container"></div>
+      \`;
+
+      await loadSettings();
+    }
+
+    async function loadSettings() {
+      try {
+        const authToken = localStorage.getItem('auth_token');
+        const response = await fetch(API_BASE + '/settings/admin', {
+          headers: {
+            'Authorization': 'Bearer ' + authToken
+          }
+        });
+        const settings = await response.json();
+
+        const container = document.getElementById('settings-container');
+        container.innerHTML = \`
+          <div style="max-width: 800px;">
+            <form id="settings-form" style="background: white; padding: 30px; border: 1px solid #c3c4c7; border-radius: 4px;">
+              <div class="form-group">
+                <label>Site Title *</label>
+                <input type="text" name="site_title" value="\${settings.site_title || ''}" required>
+                <small style="color: #646970; display: block; margin-top: 5px;">This will be displayed in the browser title bar and header.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Site URL *</label>
+                <input type="url" name="site_url" value="\${settings.site_url || ''}" required placeholder="https://example.com">
+                <small style="color: #646970; display: block; margin-top: 5px;">
+                  The full URL of your site (no trailing slash). This value is also used as the home URL in the WordPress API.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label>Admin Email *</label>
+                <input type="email" name="admin_email" value="\${settings.admin_email || ''}" required placeholder="admin@example.com">
+                <small style="color: #646970; display: block; margin-top: 5px;">This email will be used for administrative notifications.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Site Description</label>
+                <textarea name="site_description" style="min-height: 100px;">\${settings.site_description || ''}</textarea>
+                <small style="color: #646970; display: block; margin-top: 5px;">Used for SEO meta description.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Site Keywords</label>
+                <input type="text" name="site_keywords" value="\${settings.site_keywords || ''}" placeholder="blog, tech, programming">
+                <small style="color: #646970; display: block; margin-top: 5px;">Comma-separated keywords for SEO.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Site Author</label>
+                <input type="text" name="site_author" value="\${settings.site_author || ''}">
+              </div>
+
+              <div class="form-group">
+                <label>Favicon URL</label>
+                <input type="url" name="site_favicon" value="\${settings.site_favicon || ''}" placeholder="https://example.com/favicon.ico">
+                <small style="color: #646970; display: block; margin-top: 5px;">URL to your site favicon (.ico, .png). Recommended: 32x32px.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Logo URL</label>
+                <input type="url" name="site_logo" value="\${settings.site_logo || ''}" placeholder="https://example.com/logo.png">
+                <small style="color: #646970; display: block; margin-top: 5px;">URL to your site logo image.</small>
+              </div>
+
+              <div class="form-group">
+                <label>ICP Beian (备案号)</label>
+                <input type="text" name="site_icp" value="\${settings.site_icp || ''}" placeholder="京ICP备xxxxx号">
+                <small style="color: #646970; display: block; margin-top: 5px;">For Chinese sites only.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Footer Text</label>
+                <textarea name="site_footer_text" style="min-height: 80px;">\${settings.site_footer_text || ''}</textarea>
+                <small style="color: #646970; display: block; margin-top: 5px;">Displayed at the bottom of every page. HTML is supported.</small>
+              </div>
+
+              <div class="form-group">
+                <label>Custom Head HTML</label>
+                <textarea name="head_html" style="min-height: 120px; font-family: monospace; font-size: 13px;">\${settings.head_html || ''}</textarea>
+                <small style="color: #646970; display: block; margin-top: 5px;">
+                  Custom HTML code to be inserted into the &lt;head&gt; section of your site. Useful for analytics, custom CSS, or meta tags.
+                </small>
+              </div>
+
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #dcdcde;">
+
+              <h3 style="margin-bottom: 20px; color: #1d2327;">Webhook Settings</h3>
+
+              <div class="form-group">
+                <label>Webhook URL</label>
+                <input type="url" name="webhook_url" value="\${settings.webhook_url || ''}" placeholder="https://example.com/webhook">
+                <small style="color: #646970; display: block; margin-top: 5px;">
+                  The URL where webhook events will be sent. Leave empty to disable webhooks.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label>Webhook Secret</label>
+                <input type="password" name="webhook_secret" value="\${settings.webhook_secret || ''}" placeholder="Enter a secret key">
+                <small style="color: #646970; display: block; margin-top: 5px;">
+                  Secret key used to sign webhook payloads (HMAC-SHA256). The signature will be sent in the <code>X-Webhook-Signature</code> header.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label>Webhook Events</label>
+                <div style="border: 1px solid #8c8f94; border-radius: 3px; padding: 15px; background: #f9f9f9;">
+                  <div style="margin-bottom: 10px;">
+                    <strong style="font-size: 13px; color: #2c3338;">Select events to trigger webhook:</strong>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="post.created" \${(settings.webhook_events || '').includes('post.created') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      post.created (文章创建为草稿)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="post.updated" \${(settings.webhook_events || '').includes('post.updated') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      post.updated (文章更新)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="post.published" \${(settings.webhook_events || '').includes('post.published') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      post.published (文章发布)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="post.deleted" \${(settings.webhook_events || '').includes('post.deleted') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      post.deleted (文章删除)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="comment.created" \${(settings.webhook_events || '').includes('comment.created') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      comment.created (评论创建)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="comment.updated" \${(settings.webhook_events || '').includes('comment.updated') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      comment.updated (评论更新)
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
+                      <input type="checkbox" name="webhook_events" value="comment.deleted" \${(settings.webhook_events || '').includes('comment.deleted') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                      comment.deleted (评论删除)
+                    </label>
+                  </div>
+                </div>
+                <small style="color: #646970; display: block; margin-top: 5px;">
+                  Select which events should trigger the webhook. Leave all unchecked to disable webhooks.
+                  <strong>Recommended for deployment:</strong> post.published, post.updated
+                </small>
+              </div>
+
+              <div style="background: #f0f6fc; border: 1px solid #0969da; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+                <strong style="color: #0969da;">💡 Webhook Tips:</strong>
+                <ul style="margin: 10px 0 0 20px; color: #646970; font-size: 13px; line-height: 1.6;">
+                  <li><strong>For Vercel/Cloudflare Pages deployment:</strong> Only select <code>post.published</code> and <code>post.updated</code> to avoid unnecessary builds</li>
+                  <li><strong>Creating & publishing a post:</strong> Only triggers <code>post.published</code> (avoids duplicate)</li>
+                  <li><strong>Saving as draft:</strong> Triggers <code>post.created</code></li>
+                  <li><strong>Draft to publish:</strong> Triggers <code>post.published</code></li>
+                  <li><strong>Updating published post:</strong> Triggers <code>post.updated</code></li>
+                </ul>
+              </div>
+
+              <div id="settings-message" class="hidden" style="margin-bottom: 20px;"></div>
+
+              <button type="submit" class="button" style="width: 100%;">Save Settings</button>
+            </form>
+          </div>
+        \`;
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+
+          // Collect selected webhook events
+          const webhookEvents = Array.from(formData.getAll('webhook_events')).join(',');
+
+          const settingsData = {
+            site_title: formData.get('site_title'),
+            site_url: formData.get('site_url'),
+            admin_email: formData.get('admin_email'),
+            site_description: formData.get('site_description'),
+            site_keywords: formData.get('site_keywords'),
+            site_author: formData.get('site_author'),
+            site_favicon: formData.get('site_favicon'),
+            site_logo: formData.get('site_logo'),
+            site_icp: formData.get('site_icp'),
+            site_footer_text: formData.get('site_footer_text'),
+            head_html: formData.get('head_html'),
+            webhook_url: formData.get('webhook_url'),
+            webhook_secret: formData.get('webhook_secret'),
+            webhook_events: webhookEvents
+          };
+
+          try {
+            const authToken = localStorage.getItem('auth_token');
+            const response = await fetch(API_BASE + '/settings', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authToken
+              },
+              body: JSON.stringify(settingsData)
+            });
+
+            const messageDiv = document.getElementById('settings-message');
+            messageDiv.classList.remove('hidden');
+
+            if (response.ok) {
+              messageDiv.className = 'success-message';
+              messageDiv.textContent = 'Settings saved successfully!';
+
+              // Reload settings after 1 second
+              setTimeout(() => {
+                messageDiv.classList.add('hidden');
+              }, 3000);
+            } else {
+              const error = await response.json();
+              messageDiv.className = 'error-message';
+              messageDiv.textContent = 'Failed to save settings: ' + error.message;
+            }
+          } catch (error) {
+            console.error('Failed to save settings:', error);
+            const messageDiv = document.getElementById('settings-message');
+            messageDiv.classList.remove('hidden');
+            messageDiv.className = 'error-message';
+            messageDiv.textContent = 'Failed to save settings. Please try again.';
+          }
+        });
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        const container = document.getElementById('settings-container');
+        container.innerHTML = '<div class="error-message">Failed to load settings.</div>';
+      }
+    }
 
     function logout() {
       localStorage.removeItem('auth_token');

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env, User, JWTPayload } from '../types';
-import { formatUserResponse, buildPaginationHeaders, createWPError } from '../utils';
+import { formatUserResponse, buildPaginationHeaders, createWPError, getSiteSettings } from '../utils';
 import { authMiddleware, requireRole, generateToken, hashPassword, comparePassword } from '../auth';
 
 const users = new Hono<{ Bindings: Env }>();
@@ -8,6 +8,9 @@ const users = new Hono<{ Bindings: Env }>();
 // POST /wp/v2/users/login - Login (non-standard WordPress endpoint but useful)
 users.post('/login', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const body = await c.req.json();
     const { username, password } = body;
 
@@ -46,7 +49,7 @@ users.post('/login', async (c) => {
 
     return c.json({
       token,
-      user: formatUserResponse(user, c.env),
+      user: await formatUserResponse(user, baseUrl, true),
       user_email: user.email,
       user_nicename: user.username,
       user_display_name: user.display_name || user.username
@@ -59,6 +62,9 @@ users.post('/login', async (c) => {
 // POST /wp/v2/users/register - Register new user
 users.post('/register', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const body = await c.req.json();
     const { username, email, password, display_name } = body;
 
@@ -120,7 +126,7 @@ users.post('/register', async (c) => {
     return c.json(
       {
         token,
-        user: formatUserResponse(createdUser!, c.env)
+        user: await formatUserResponse(createdUser!, baseUrl, true)
       },
       201
     );
@@ -132,6 +138,9 @@ users.post('/register', async (c) => {
 // GET /wp/v2/users/me - Get current user
 users.get('/me', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const user = c.get('user') as JWTPayload;
 
     const dbUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
@@ -144,7 +153,7 @@ users.get('/me', authMiddleware, async (c) => {
 
     delete dbUser.password;
 
-    return c.json(formatUserResponse(dbUser, c.env));
+    return c.json(await formatUserResponse(dbUser, baseUrl, true));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -153,6 +162,18 @@ users.get('/me', authMiddleware, async (c) => {
 // GET /wp/v2/users - List users
 users.get('/', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
+    // Check if user is authenticated admin
+    let isAdmin = false;
+    try {
+      const user = c.get('user') as JWTPayload;
+      isAdmin = user && ['administrator', 'editor'].includes(user.role);
+    } catch (e) {
+      // Not authenticated, continue as public user
+    }
+
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('per_page') || '10');
     const search = c.req.query('search');
@@ -203,17 +224,17 @@ users.get('/', async (c) => {
     const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first();
     const totalItems = (countResult?.count as number) || 0;
 
-    const formattedUsers = (result.results as User[]).map((user) => {
+    const formattedUsers = await Promise.all((result.results as User[]).map(async (user) => {
       delete user.password;
-      return formatUserResponse(user, c.env);
-    });
+      return await formatUserResponse(user, baseUrl, isAdmin);
+    }));
 
     // Add pagination headers
     const headers = buildPaginationHeaders(
       page,
       perPage,
       totalItems,
-      `${c.env.SITE_URL}/wp-json/wp/v2/users`
+      `${baseUrl}/wp-json/wp/v2/users`
     );
 
     return c.json(formattedUsers, 200, headers);
@@ -225,7 +246,19 @@ users.get('/', async (c) => {
 // GET /wp/v2/users/:id - Get single user
 users.get('/:id', async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
+
+    // Check if user is authenticated admin or viewing their own profile
+    let isAdmin = false;
+    try {
+      const currentUser = c.get('user') as JWTPayload;
+      isAdmin = (currentUser && ['administrator', 'editor'].includes(currentUser.role)) || currentUser?.userId === id;
+    } catch (e) {
+      // Not authenticated, continue as public user
+    }
 
     const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ? AND status = ?')
       .bind(id, 'active')
@@ -237,7 +270,7 @@ users.get('/:id', async (c) => {
 
     delete user.password;
 
-    return c.json(formatUserResponse(user, c.env));
+    return c.json(await formatUserResponse(user, baseUrl, isAdmin));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -246,6 +279,9 @@ users.get('/:id', async (c) => {
 // POST /wp/v2/users - Create user (admin only)
 users.post('/', authMiddleware, requireRole('administrator'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const body = await c.req.json();
     const { username, email, password, display_name, role } = body;
 
@@ -301,7 +337,7 @@ users.post('/', authMiddleware, requireRole('administrator'), async (c) => {
 
     delete createdUser!.password;
 
-    return c.json(formatUserResponse(createdUser!, c.env), 201);
+    return c.json(await formatUserResponse(createdUser!, baseUrl, true), 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -310,6 +346,9 @@ users.post('/', authMiddleware, requireRole('administrator'), async (c) => {
 // PUT /wp/v2/users/:id - Update user
 users.put('/:id', authMiddleware, async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const currentUser = c.get('user') as JWTPayload;
     const id = parseInt(c.req.param('id'));
 
@@ -381,7 +420,7 @@ users.put('/:id', authMiddleware, async (c) => {
     // If no fields to update, return current user
     if (updates.length === 0) {
       delete existingUser.password;
-      return c.json(formatUserResponse(existingUser, c.env));
+      return c.json(await formatUserResponse(existingUser, baseUrl, true));
     }
 
     const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
@@ -396,7 +435,7 @@ users.put('/:id', authMiddleware, async (c) => {
 
     delete updatedUser!.password;
 
-    return c.json(formatUserResponse(updatedUser!, c.env));
+    return c.json(await formatUserResponse(updatedUser!, baseUrl, true));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -405,6 +444,9 @@ users.put('/:id', authMiddleware, async (c) => {
 // DELETE /wp/v2/users/:id - Delete user (admin only)
 users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => {
   try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+
     const id = parseInt(c.req.param('id'));
     const reassign = c.req.query('reassign');
     const force = c.req.query('force') === 'true';
@@ -445,7 +487,7 @@ users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => 
 
       delete user.password;
 
-      return c.json({ deleted: true, previous: formatUserResponse(user, c.env) });
+      return c.json({ deleted: true, previous: await formatUserResponse(user, baseUrl, true) });
     } else {
       // Deactivate user
       await c.env.DB.prepare('UPDATE users SET status = ? WHERE id = ?').bind('inactive', id).run();
@@ -456,7 +498,7 @@ users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => 
 
       delete deactivatedUser!.password;
 
-      return c.json(formatUserResponse(deactivatedUser!, c.env));
+      return c.json(await formatUserResponse(deactivatedUser!, baseUrl, true));
     }
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
