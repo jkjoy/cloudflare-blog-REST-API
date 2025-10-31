@@ -219,11 +219,18 @@ npm run dev
 
 1. 参考AKINA主题：
 使用vue3 + vite + pinia + vue-router + markdown-it + highlight.js等技术栈构建的现代化前端界面。
+
 https://github.com/jkjoy/cfblog-theme-akina
 
+演示地址: https://akina.zxd.im
+
 2. 参考Paper主题：
+
 使用Astro + Tailwind CSS等技术栈构建的简洁前端界面。
+
 https://github.com/jkjoy/astro-paper-cfblog
+
+演示地址: https://paper.zxd.im
 
 ## 注意事项
 
