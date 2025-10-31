@@ -215,6 +215,16 @@ npm run dev
 - `GET /api/settings` - 获取系统设置
 - `PUT /api/settings` - 更新系统设置（需要认证）
 
+## 前端项目
+
+1. 参考AKINA主题：
+使用vue3 + vite + pinia + vue-router + markdown-it + highlight.js等技术栈构建的现代化前端界面。
+https://github.com/jkjoy/cfblog-theme-akina
+
+2. 参考Paper主题：
+使用Astro + Tailwind CSS等技术栈构建的简洁前端界面。
+https://github.com/jkjoy/astro-paper-cfblog
+
 ## 注意事项
 
 1. **数据库初始化**：首次部署时必须运行 `schema.sql` 初始化数据库
