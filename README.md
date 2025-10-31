@@ -70,18 +70,7 @@ CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生�
 cfblog/
 ├── src/                    # 后端源码
 │   ├── index.ts           # Workers 入口文件
-│   └── ...
-├── frontend/              # 前端源码
-│   ├── src/
-│   │   ├── components/   # Vue 组件
-│   │   ├── views/        # 页面视图
-│   │   ├── stores/       # Pinia 状态管理
-│   │   ├── router/       # 路由配置
-│   │   └── assets/       # 静态资源
-│   ├── package.json
-│   └── vite.config.ts
 ├── schema.sql             # 完整数据库架构（已整合所有迁移）
-├── migrations/            # 历史迁移文件（已整合到 schema.sql）
 ├── wrangler.toml          # Cloudflare Workers 配置
 ├── package.json
 └── README.md
@@ -110,13 +99,6 @@ cd cfblog
 npm install
 ```
 
-3. **安装前端依赖**
-```bash
-cd frontend
-npm install
-cd ..
-```
-
 ### 配置
 
 1. **配置 Wrangler**
@@ -137,6 +119,10 @@ database_id = "your-database-id-here"  # 替换为你的 D1 数据库 ID
 binding = "MEDIA"
 bucket_name = "cfblog-media"           # 替换为你的 R2 存储桶名称
 
+# Workers AI binding
+[ai]
+binding = "AI"
+
 [vars]
 JWT_SECRET = "your-jwt-secret-here"    # 替换为安全的密钥
 ```
@@ -156,7 +142,7 @@ wrangler r2 bucket create cfblog-media
 使用整合后的 schema.sql 初始化数据库：
 
 ```bash
-wrangler d1 execute cfblog-db --file=./schema.sql
+wrangler d1 execute cfblog-db --file=./schema.sql --remote
 ```
 
 **重要说明：**
@@ -172,34 +158,11 @@ wrangler d1 execute cfblog-db --file=./schema.sql
 
 ### 开发
 
-1. **启动后端开发服务器**
+**启动后端开发服务器**
 ```bash
 npm run dev
 ```
 后端 API 将运行在 http://127.0.0.1:8787
-
-2. **启动前端开发服务器**
-```bash
-cd frontend
-npm run dev
-```
-前端将运行在 http://localhost:5173
-
-### 创建管理员账号
-
-首次使用需要创建管理员账号。使用 API 创建：
-
-```bash
-curl -X POST http://127.0.0.1:8787/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@example.com",
-    "password": "your-secure-password",
-    "display_name": "管理员",
-    "role": "administrator"
-  }'
-```
 
 ## API 文档
 
@@ -251,62 +214,6 @@ curl -X POST http://127.0.0.1:8787/api/auth/register \
 
 - `GET /api/settings` - 获取系统设置
 - `PUT /api/settings` - 更新系统设置（需要认证）
-
-## 部署
-
-### 部署到 Cloudflare
-
-1. **构建前端**
-```bash
-cd frontend
-npm run build
-```
-
-2. **部署后端**
-```bash
-npm run deploy
-```
-
-3. **配置域名**
-
-在 Cloudflare Dashboard 中为你的 Worker 配置自定义域名。
-
-### 环境变量
-
-生产环境需要设置以下环境变量：
-
-- `JWT_SECRET` - JWT 签名密钥（必须）
-- 数据库和存储配置在 `wrangler.toml` 中
-
-## 开发指南
-
-### 前端开发
-
-前端使用 Vue 3 + TypeScript，组件库位于 `frontend/src/components/`。
-
-主要组件：
-- `PostCard.vue` - 文章卡片
-- `Pagination.vue` - 分页组件
-- `Sidebar.vue` - 侧边栏
-- `CategoryList.vue` - 分类列表
-- `TagCloud.vue` - 标签云
-
-### 后端开发
-
-后端使用 Hono 框架，路由定义在 `src/index.ts`。
-
-### 样式主题
-
-前端使用 CSS 变量定义主题色：
-
-```css
---primary-color: #A0DAD0;     /* 主色调 */
---accent-color: #ff6d6d;      /* 强调色 */
---text-primary: #737373;      /* 主文本 */
---text-secondary: #6f6f6f;    /* 次要文本 */
-```
-
-可在 `frontend/src/assets/main.css` 中修改。
 
 ## 注意事项
 
