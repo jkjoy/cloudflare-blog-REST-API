@@ -1,11 +1,7 @@
-# CFBlog
-
-基于 Cloudflare Workers + D1 + R2 构建的现代化无头博客系统。
-
 ## 项目简介
 
 CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生态系统构建，具有高性能、低成本、全球分发的特点。
-
+  
 ### 技术栈
 
 **后端 (API)**
@@ -16,15 +12,6 @@ CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生�
 - TypeScript - 类型安全的开发体验
 - bcryptjs - 密码加密
 - jose - JWT 认证
-
-**前端**
-- Vue 3 - 渐进式 JavaScript 框架
-- TypeScript - 类型安全
-- Vue Router - 路由管理
-- Pinia - 状态管理
-- Vite - 快速的构建工具
-- Markdown-it - Markdown 渲染
-- Highlight.js - 代码高亮
 
 ## 功能特性
 
@@ -38,7 +25,9 @@ CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生�
 - ✅ 页面和文章类型支持
 - ✅ 评论系统
 - ✅ 浏览计数
-
+- ✅ 使用Cloudflare AI自动生成文章的slug
+- ✅ 使用Cloudflare AI自动生成文章的摘要
+- 
 ### 媒体管理
 - ✅ 图片上传到 R2 存储
 - ✅ 媒体库管理
@@ -63,7 +52,9 @@ CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生�
 - ✅ SEO 配置
 - ✅ 自定义页脚文本
 - ✅ ICP 备案信息
+- ✅ webhook url 填写Vercel 或者 Cloudflare Pages的部署钩子,选择触发的事件,会在事件发生时触发部署任务
 
+  
 ## 项目结构
 
 ```
@@ -217,28 +208,20 @@ npm run dev
 
 ## 前端项目
 
-1. 参考AKINA主题：
+###  AKINA主题：
 使用vue3 + vite + pinia + vue-router + markdown-it + highlight.js等技术栈构建的现代化前端界面。
 
-https://github.com/jkjoy/cfblog-theme-akina
+项目地址 https://github.com/jkjoy/cfblog-theme-akina
 
 演示地址: https://akina.zxd.im
 
-2. 参考Paper主题：
+###  Paper主题：
 
-使用Astro + Tailwind CSS等技术栈构建的简洁前端界面。
+使用`Astro` + `Tailwind CSS`等技术栈构建的简洁前端界面。
 
-https://github.com/jkjoy/astro-paper-cfblog
+项目地址 https://github.com/jkjoy/astro-paper-cfblog
 
 演示地址: https://paper.zxd.im
-
-## 注意事项
-
-1. **数据库初始化**：首次部署时必须运行 `schema.sql` 初始化数据库
-2. **安全配置**：生产环境务必修改 `JWT_SECRET` 为安全的随机字符串
-3. **CORS 配置**：根据前端部署域名调整 CORS 设置
-4. **媒体存储**：R2 存储桶需要配置公开访问或使用自定义域名
-5. **迁移文件**：`migrations/` 目录中的文件已整合到 `schema.sql`，新部署无需单独执行
 
 ## 许可证
 
