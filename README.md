@@ -1,5 +1,5 @@
 ## 项目简介
-
+![后台截图](./ScreenShot.png)
 CFBlog 是一个类似 WordPress 的无头博客系统，使用 Cloudflare 生态系统构建，具有高性能、低成本、全球分发的特点。
   
 ### 技术栈
