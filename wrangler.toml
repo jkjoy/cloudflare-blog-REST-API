@@ -17,6 +17,16 @@ database_id = "22b5f9d0-291f-4f00-b785-d5fbb1075278"
 binding = "MEDIA"
 bucket_name = "cfblog-media"
 
+# KV cache binding
+# Create namespaces first:
+#   npx wrangler kv namespace create CACHE
+#   npx wrangler kv namespace create CACHE --preview
+# Then uncomment and replace the ids below.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "917dde84089e4ac6ab1d5ba49fe272aa"
+# preview_id = "your-preview-kv-namespace-id"
+
 # Workers AI binding
 # Note: In local dev mode, AI still connects to remote Cloudflare AI
 [ai]

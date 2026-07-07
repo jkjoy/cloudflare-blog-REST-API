@@ -258,6 +258,44 @@ const RESERVED_NAV_SLUGS = new Set([
 ]);
 
 const RSS_FEED_LIMIT = 50;
+const PUBLIC_KV_CACHE_VERSION = 'v1';
+const PUBLIC_COMMON_CACHE_TTL_SECONDS = 300;
+const PUBLIC_RSS_CACHE_TTL_SECONDS = 900;
+const PUBLIC_SITEMAP_CACHE_TTL_SECONDS = 3600;
+
+async function getKvJson<T>(
+  env: Env,
+  key: string,
+  ttlSeconds: number,
+  loader: () => Promise<T>,
+): Promise<T> {
+  if (!env.CACHE) {
+    return loader();
+  }
+
+  const cached = await env.CACHE.get(key, 'json');
+  if (cached !== null) {
+    return cached as T;
+  }
+
+  const value = await loader();
+  await env.CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
+  return value;
+}
+
+function getPublicCacheOrigin(requestUrl: string): string {
+  return normalizeBaseUrl(new URL(requestUrl).origin);
+}
+
+function buildPublicCacheKey(requestUrl: string, name: string, ...parts: unknown[]): string {
+  const suffix = parts
+    .map((part) =>
+      encodeURIComponent(typeof part === 'string' ? part : JSON.stringify(part)),
+    )
+    .join(':');
+  const baseKey = `cfblog:${PUBLIC_KV_CACHE_VERSION}:public:${name}:${getPublicCacheOrigin(requestUrl)}`;
+  return suffix ? `${baseKey}:${suffix}` : baseKey;
+}
 
 export function registerPublicSiteRoutes(app: AppRouter): void {
   app.get('/favicon.ico', servePublicAsset);
@@ -299,11 +337,14 @@ export async function renderPublicHome(c: AppContext): Promise<Response> {
   const page = getPageNumber(c.req.query('page'));
   const keyword = normalizeQuery(c.req.query('q'));
   const common = await getCommonSiteData(c.env, c.req.url);
-  const listData = await getPostList(c.env, common.site, {
+  const listOptions = {
     page,
     perPage: common.site.homePostsPerPage,
     search: keyword || undefined,
-  });
+  };
+  const listData = keyword
+    ? await getPostList(c.env, common.site, listOptions)
+    : await getCachedPostList(c.env, c.req.url, common.site, listOptions);
 
   const mainHtml = renderArticleGridPage({
     description: keyword ? `共找到 ${listData.pagination.totalItems} 篇匹配文章。` : undefined,
@@ -338,8 +379,13 @@ export async function renderPublicHome(c: AppContext): Promise<Response> {
 }
 
 async function renderRssFeed(c: AppContext): Promise<Response> {
-  const site = await getSiteMeta(c.env, c.req.url);
-  const items = await getRssFeedItems(c.env, site, RSS_FEED_LIMIT);
+  const site = await getCachedSiteMeta(c.env, c.req.url);
+  const items = await getKvJson(
+    c.env,
+    buildPublicCacheKey(c.req.url, 'rss-items'),
+    PUBLIC_RSS_CACHE_TTL_SECONDS,
+    () => getRssFeedItems(c.env, site, RSS_FEED_LIMIT),
+  );
   const view = normalizeQuery(c.req.query('view')).toLowerCase();
   const headers = {
     'Cache-Control': 'public, max-age=900',
@@ -357,7 +403,7 @@ async function renderRssFeed(c: AppContext): Promise<Response> {
 }
 
 async function serveRobotsTxt(c: AppContext): Promise<Response> {
-  const site = await getSiteMeta(c.env, c.req.url);
+  const site = await getCachedSiteMeta(c.env, c.req.url);
   return c.body(renderRobotsTxt(site), 200, {
     'Cache-Control': 'public, max-age=3600',
     'Content-Type': 'text/plain; charset=utf-8',
@@ -365,8 +411,13 @@ async function serveRobotsTxt(c: AppContext): Promise<Response> {
 }
 
 async function serveSitemapXml(c: AppContext): Promise<Response> {
-  const site = await getSiteMeta(c.env, c.req.url);
-  const entries = await getSitemapEntries(c.env);
+  const site = await getCachedSiteMeta(c.env, c.req.url);
+  const entries = await getKvJson(
+    c.env,
+    buildPublicCacheKey(c.req.url, 'sitemap-entries'),
+    PUBLIC_SITEMAP_CACHE_TTL_SECONDS,
+    () => getSitemapEntries(c.env),
+  );
   return c.body(renderSitemapXml(site, entries), 200, {
     'Cache-Control': 'public, max-age=3600',
     'Content-Type': 'application/xml; charset=utf-8',
@@ -411,7 +462,7 @@ async function renderArchivePage(c: AppContext): Promise<Response> {
     );
   }
 
-  const posts = await getArchivePosts(c.env, common.site, {});
+  const posts = await getCachedArchivePosts(c.env, c.req.url, common.site, {});
 
   return c.html(
     renderLayout({
@@ -439,13 +490,13 @@ async function renderArchivePage(c: AppContext): Promise<Response> {
 async function renderCategoryPage(c: AppContext): Promise<Response> {
   const slug = c.req.param('slug') || '';
   const common = await getCommonSiteData(c.env, c.req.url);
-  const category = await getCategoryBySlug(c.env, slug);
+  const category = await getCachedCategoryBySlug(c.env, c.req.url, slug);
 
   if (!category) {
     return c.html(renderNotFoundPage(common, '这个分类不存在或尚未公开。'), 404);
   }
 
-  const posts = await getArchivePosts(c.env, common.site, {
+  const posts = await getCachedArchivePosts(c.env, c.req.url, common.site, {
     categorySlug: slug,
   });
 
@@ -477,13 +528,13 @@ async function renderCategoryPage(c: AppContext): Promise<Response> {
 async function renderTagPage(c: AppContext): Promise<Response> {
   const slug = c.req.param('slug') || '';
   const common = await getCommonSiteData(c.env, c.req.url);
-  const tag = await getTagBySlug(c.env, slug);
+  const tag = await getCachedTagBySlug(c.env, c.req.url, slug);
 
   if (!tag) {
     return c.html(renderNotFoundPage(common, '这个标签不存在或尚未公开。'), 404);
   }
 
-  const posts = await getArchivePosts(c.env, common.site, {
+  const posts = await getCachedArchivePosts(c.env, c.req.url, common.site, {
     tagSlug: slug,
   });
 
@@ -514,7 +565,12 @@ async function renderTagPage(c: AppContext): Promise<Response> {
 
 async function renderLinksPage(c: AppContext): Promise<Response> {
   const common = await getCommonSiteData(c.env, c.req.url);
-  const groups = await getLinkGroups(c.env);
+  const groups = await getKvJson(
+    c.env,
+    buildPublicCacheKey(c.req.url, 'link-groups'),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getLinkGroups(c.env),
+  );
   const items = groups.flatMap((group) =>
     group.items.map((item) => ({
       ...item,
@@ -792,24 +848,62 @@ async function getArchivePosts(
   return hydratePostCards(env, site, result.results || []);
 }
 
-async function getCommonSiteData(env: Env, requestUrl: string): Promise<CommonSiteData> {
-  const settings = await getSiteMeta(env, requestUrl);
-  const [navPages, topCategories, topTags, stats, recentPosts] = await Promise.all([
-    getNavPages(env),
-    getTopCategories(env, 8),
-    getTopTags(env, 18),
-    getCounts(env),
-    getRecentPosts(env, settings, 5),
-  ]);
+async function getCachedArchivePosts(
+  env: Env,
+  requestUrl: string,
+  site: SiteMeta,
+  options: {
+    categorySlug?: string;
+    search?: string;
+    tagSlug?: string;
+  },
+): Promise<PostCard[]> {
+  if (options.search) {
+    return getArchivePosts(env, site, options);
+  }
 
-  return {
-    navPages,
-    recentPosts,
-    site: settings,
-    stats,
-    topCategories,
-    topTags,
-  };
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'archive-posts', options),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getArchivePosts(env, site, options),
+  );
+}
+
+async function getCommonSiteData(env: Env, requestUrl: string): Promise<CommonSiteData> {
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'common'),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    async () => {
+      const settings = await getSiteMeta(env, requestUrl);
+      const [navPages, topCategories, topTags, stats, recentPosts] = await Promise.all([
+        getNavPages(env),
+        getTopCategories(env, 8),
+        getTopTags(env, 18),
+        getCounts(env),
+        getRecentPosts(env, settings, 5),
+      ]);
+
+      return {
+        navPages,
+        recentPosts,
+        site: settings,
+        stats,
+        topCategories,
+        topTags,
+      };
+    },
+  );
+}
+
+async function getCachedSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'site-meta'),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getSiteMeta(env, requestUrl),
+  );
 }
 
 async function getSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
@@ -1202,6 +1296,31 @@ async function getPostList(
   };
 }
 
+async function getCachedPostList(
+  env: Env,
+  requestUrl: string,
+  site: SiteMeta,
+  options: {
+    categorySlug?: string;
+    excludeIds?: number[];
+    page: number;
+    perPage: number;
+    search?: string;
+    tagSlug?: string;
+  },
+): Promise<{ items: PostCard[]; pagination: PaginationData }> {
+  if (options.search) {
+    return getPostList(env, site, options);
+  }
+
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'post-list', options),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getPostList(env, site, options),
+  );
+}
+
 async function getCategoryBySlug(env: Env, slug: string): Promise<TaxonomyItem | null> {
   const row = await env.DB.prepare(`
     SELECT id, name, slug, description, count
@@ -1212,6 +1331,19 @@ async function getCategoryBySlug(env: Env, slug: string): Promise<TaxonomyItem |
   return row ? mapTaxonomy(row) : null;
 }
 
+async function getCachedCategoryBySlug(
+  env: Env,
+  requestUrl: string,
+  slug: string,
+): Promise<TaxonomyItem | null> {
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'category', slug),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getCategoryBySlug(env, slug),
+  );
+}
+
 async function getTagBySlug(env: Env, slug: string): Promise<TaxonomyItem | null> {
   const row = await env.DB.prepare(`
     SELECT id, name, slug, description, count
@@ -1220,6 +1352,19 @@ async function getTagBySlug(env: Env, slug: string): Promise<TaxonomyItem | null
   `).bind(slug).first<any>();
 
   return row ? mapTaxonomy(row) : null;
+}
+
+async function getCachedTagBySlug(
+  env: Env,
+  requestUrl: string,
+  slug: string,
+): Promise<TaxonomyItem | null> {
+  return getKvJson(
+    env,
+    buildPublicCacheKey(requestUrl, 'tag', slug),
+    PUBLIC_COMMON_CACHE_TTL_SECONDS,
+    () => getTagBySlug(env, slug),
+  );
 }
 
 async function getContentDetailBySlug(

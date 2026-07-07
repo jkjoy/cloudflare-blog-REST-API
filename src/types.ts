@@ -4,6 +4,7 @@ import type { JWTPayload as JoseJWTPayload } from 'jose';
 // Cloudflare Workers environment bindings
 export interface Env {
   ASSETS: Fetcher;
+  CACHE?: KVNamespace;
   DB: D1Database;
   MEDIA: R2Bucket;
   AI: Ai;
