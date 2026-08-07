@@ -33,47 +33,55 @@ media.get('/', authMiddleware, async (c) => {
     const parent = c.req.query('parent');
     const mediaType = c.req.query('media_type');
     const mimeType = c.req.query('mime_type');
+    const search = c.req.query('search')?.trim();
 
     const offset = (page - 1) * perPage;
-
-    let query = 'SELECT * FROM media WHERE 1=1';
-    const params: any[] = [];
+    const filters: string[] = [];
+    const filterParams: Array<string | number> = [];
 
     if (author) {
-      query += ' AND author_id = ?';
-      params.push(parseInt(author));
+      filters.push('author_id = ?');
+      filterParams.push(parseInt(author));
     }
 
     if (parent) {
       // This would be for attached media to posts
-      query += ' AND id IN (SELECT CAST(meta_value AS INTEGER) FROM post_meta WHERE meta_key = "_thumbnail_id" AND post_id = ?)';
-      params.push(parseInt(parent));
+      filters.push('id IN (SELECT CAST(meta_value AS INTEGER) FROM post_meta WHERE meta_key = "_thumbnail_id" AND post_id = ?)');
+      filterParams.push(parseInt(parent));
     }
 
     if (mediaType) {
-      query += ' AND file_type = ?';
-      params.push(mediaType);
+      filters.push('file_type = ?');
+      filterParams.push(mediaType);
     }
 
     if (mimeType) {
-      query += ' AND mime_type = ?';
-      params.push(mimeType);
+      filters.push('mime_type = ?');
+      filterParams.push(mimeType);
     }
 
+    if (search) {
+      filters.push(`(
+        title LIKE ? COLLATE NOCASE OR
+        filename LIKE ? COLLATE NOCASE OR
+        COALESCE(alt_text, '') LIKE ? COLLATE NOCASE OR
+        COALESCE(caption, '') LIKE ? COLLATE NOCASE OR
+        COALESCE(description, '') LIKE ? COLLATE NOCASE
+      )`);
+      const pattern = `%${search}%`;
+      filterParams.push(pattern, pattern, pattern, pattern, pattern);
+    }
+
+    const whereClause = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';
+    let query = `SELECT * FROM media${whereClause}`;
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(perPage, offset);
+    const params = [...filterParams, perPage, offset];
 
     const result = await c.env.DB.prepare(query).bind(...params).all<Media>();
 
-    // Get total count
-    let countQuery = 'SELECT COUNT(*) as count FROM media WHERE 1=1';
-    const countParams: any[] = [];
-    if (author) {
-      countQuery += ' AND author_id = ?';
-      countParams.push(parseInt(author));
-    }
-
-    const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first<{ count: number }>();
+    const countResult = await c.env.DB.prepare(`SELECT COUNT(*) as count FROM media${whereClause}`)
+      .bind(...filterParams)
+      .first<{ count: number }>();
     const totalItems = countResult?.count || 0;
 
     const formattedMedia = result.results.map((m) =>

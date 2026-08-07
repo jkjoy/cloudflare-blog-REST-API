@@ -34,7 +34,11 @@ linkCategories.get('/', async (c) => {
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
     const { results } = await c.env.DB.prepare(`
-      SELECT * FROM link_categories ORDER BY name ASC
+      SELECT lc.id, lc.name, lc.slug, lc.description, COUNT(l.id) AS count
+      FROM link_categories lc
+      LEFT JOIN links l ON l.category_id = lc.id
+      GROUP BY lc.id, lc.name, lc.slug, lc.description
+      ORDER BY lc.name ASC
     `).all<LinkCategoryRow>();
 
     return c.json(results.map((cat) => formatLinkCategoryResponse(cat, baseUrl)));
@@ -53,7 +57,11 @@ linkCategories.get('/:id', async (c) => {
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
     const category = await c.env.DB.prepare(`
-      SELECT * FROM link_categories WHERE id = ?
+      SELECT lc.id, lc.name, lc.slug, lc.description, COUNT(l.id) AS count
+      FROM link_categories lc
+      LEFT JOIN links l ON l.category_id = lc.id
+      WHERE lc.id = ?
+      GROUP BY lc.id, lc.name, lc.slug, lc.description
     `).bind(id).first<LinkCategoryRow>();
 
     if (!category) {

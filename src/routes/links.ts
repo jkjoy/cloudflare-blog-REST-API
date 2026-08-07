@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import type { AppEnv } from '../types';
-import { authMiddleware, requireRole } from '../auth';
+import type { AppEnv, JWTPayload } from '../types';
+import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
 import { getSiteSettings, parsePageParam, parsePerPageParam } from '../utils';
 
 const links = new Hono<AppEnv>();
@@ -51,7 +51,7 @@ function formatLinkResponse(link: LinkWithCategoryRow, baseUrl: string) {
 }
 
 // Get all links
-links.get('/', async (c) => {
+links.get('/', optionalAuthMiddleware, async (c) => {
   try {
     const settings = await getSiteSettings(c.env);
     const baseUrl = settings.site_url || 'http://localhost:8787';
@@ -59,36 +59,55 @@ links.get('/', async (c) => {
     const url = new URL(c.req.url);
     const perPage = parsePerPageParam(url.searchParams.get('per_page'), 50);
     const page = parsePageParam(url.searchParams.get('page'));
-    const categoryId = url.searchParams.get('category');
-    const visible = url.searchParams.get('visible') || 'yes';
+    const requestedCategoryId = Number.parseInt(url.searchParams.get('category') || '', 10);
+    const categoryId = Number.isInteger(requestedCategoryId) && requestedCategoryId > 0
+      ? requestedCategoryId
+      : null;
+    const requestedVisible = url.searchParams.get('visible') || 'yes';
+    const search = url.searchParams.get('search')?.trim();
+    const user = c.get('user') as JWTPayload | undefined;
+    const isAdmin = !!user && ['administrator', 'editor'].includes(user.role);
+    const visible = isAdmin ? requestedVisible : 'yes';
     const offset = (page - 1) * perPage;
 
     let query = `
       SELECT l.*, lc.name as category_name, lc.slug as category_slug
       FROM links l
       LEFT JOIN link_categories lc ON l.category_id = lc.id
-      WHERE l.visible = ?
     `;
-    const params: any[] = [visible];
+    const filters: string[] = [];
+    const filterParams: Array<string | number> = [];
 
-    if (categoryId) {
-      query += ` AND l.category_id = ?`;
-      params.push(parseInt(categoryId));
+    if (visible !== 'all') {
+      filters.push('l.visible = ?');
+      filterParams.push(visible === 'no' ? 'no' : 'yes');
     }
 
+    if (categoryId) {
+      filters.push('l.category_id = ?');
+      filterParams.push(categoryId);
+    }
+
+    if (search) {
+      filters.push(`(
+        l.name LIKE ? COLLATE NOCASE OR
+        l.url LIKE ? COLLATE NOCASE OR
+        COALESCE(l.description, '') LIKE ? COLLATE NOCASE
+      )`);
+      const pattern = `%${search}%`;
+      filterParams.push(pattern, pattern, pattern);
+    }
+
+    const whereClause = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';
+    query += whereClause;
     query += ` ORDER BY l.sort_order ASC, l.created_at DESC LIMIT ? OFFSET ?`;
-    params.push(perPage, offset);
+    const params = [...filterParams, perPage, offset];
 
     const { results } = await c.env.DB.prepare(query).bind(...params).all<LinkWithCategoryRow>();
 
-    // Get total count
-    let countQuery = `SELECT COUNT(*) as total FROM links WHERE visible = ?`;
-    const countParams: any[] = [visible];
-    if (categoryId) {
-      countQuery += ` AND category_id = ?`;
-      countParams.push(parseInt(categoryId));
-    }
-    const total = (await c.env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>())?.total || 0;
+    const total = (await c.env.DB.prepare(`SELECT COUNT(*) as total FROM links l${whereClause}`)
+      .bind(...filterParams)
+      .first<{ total: number }>())?.total || 0;
 
     const totalPages = Math.ceil(total / perPage);
 
@@ -103,7 +122,7 @@ links.get('/', async (c) => {
 });
 
 // Get single link
-links.get('/:id', async (c) => {
+links.get('/:id', optionalAuthMiddleware, async (c) => {
   const id = parseInt(c.req.param('id') || '');
 
   try {
@@ -118,6 +137,12 @@ links.get('/:id', async (c) => {
     `).bind(id).first<LinkWithCategoryRow>();
 
     if (!link) {
+      return c.json({ code: 'rest_link_invalid', message: 'Invalid link ID.' }, 404);
+    }
+
+    const user = c.get('user') as JWTPayload | undefined;
+    const isAdmin = !!user && ['administrator', 'editor'].includes(user.role);
+    if (link.visible !== 'yes' && !isAdmin) {
       return c.json({ code: 'rest_link_invalid', message: 'Invalid link ID.' }, 404);
     }
 
@@ -232,7 +257,7 @@ links.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async 
       // Update category counts
       if (existingLink.category_id !== category_id) {
         await c.env.DB.prepare(`
-          UPDATE link_categories SET count = count - 1 WHERE id = ?
+          UPDATE link_categories SET count = MAX(count - 1, 0) WHERE id = ?
         `).bind(existingLink.category_id).run();
 
         await c.env.DB.prepare(`
@@ -299,7 +324,7 @@ links.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), asy
 
     // Update category count
     await c.env.DB.prepare(`
-      UPDATE link_categories SET count = count - 1 WHERE id = ?
+      UPDATE link_categories SET count = MAX(count - 1, 0) WHERE id = ?
     `).bind(link.category_id).run();
 
     await c.env.DB.prepare(`

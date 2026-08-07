@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build admin application
+        run: npm run admin:build
+
       - name: Reconcile remote D1 schema
         if: github.event_name == 'push' || inputs.apply_migrations == true
         env:
@@ -50,3 +53,31 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Ensure Worker JWT_SECRET
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          worker_secrets="$(npx wrangler secret list --format json)"
+          if node -e '
+            let input = "";
+            process.stdin.setEncoding("utf8");
+            process.stdin.on("data", (chunk) => { input += chunk; });
+            process.stdin.on("end", () => {
+              const secrets = JSON.parse(input);
+              process.exit(secrets.some((secret) => secret.name === "JWT_SECRET") ? 0 : 1);
+            });
+          ' <<< "$worker_secrets"; then
+            echo "JWT_SECRET already exists; skipping."
+          else
+            if [[ -z "${JWT_SECRET:-}" ]]; then
+              echo "::error::JWT_SECRET is missing from both the Worker and GitHub Actions secrets."
+              exit 1
+            fi
+            printf '%s' "$JWT_SECRET" | npx wrangler secret put JWT_SECRET
+          fi

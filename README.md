@@ -17,12 +17,17 @@ CFBlog 是一个类似 WordPress 的博客系统，使用 Cloudflare 生态系�
 - bcryptjs - 密码加密
 - jose - JWT 认证
 
-**前端 (SSR)**
+**前端**
 - Cloudflare Workers + Hono HTML 渲染
 - Marked - Markdown 转 HTML
-- 原生 CSS + 少量原生 JavaScript
+- Vue 3 + Vite - 新版管理后台
+- Pinia + Vue Router - 后台状态与路由
+- Naive UI + Lucide - 后台组件与图标
+- 原生 CSS + 少量原生 JavaScript - 公开前台与兼容后台
 - Workers Assets - 托管 `public/` 下的主题静态资源
 - 一体化部署: 前台、后台、API 同域同服务
+
+新版后台采用增量迁移：`/wp-admin` 已使用 Vue 3，登录、响应式框架、仪表盘、文章与页面编辑器、文章列表、页面列表、动态管理、分类、标签、媒体库、链接与链接分类、统一评论管理、内容导入、用户管理和系统设置已完成迁移；尚未迁移的管理页面会进入 `/wp-admin/legacy`，迁移期间两套界面共用原有 API 与登录状态。
 
 ## 功能特性
 
@@ -171,6 +176,9 @@ cfblog/
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml     # GitHub Actions 自动部署
+├── admin/                 # Vue 3 管理后台源码与 Vite 配置
+├── public/
+│   └── _cfblog/admin/     # Vue 后台构建产物，由 Workers Assets 托管
 ├── src/                    # 后端源码
 │   ├── index.ts           # Workers 入口文件
 │   ├── public-site/       # 一体化前台渲染模块
@@ -238,8 +246,19 @@ bucket_name = "cfblog-media"           # 替换为你的 R2 存储桶名称
 [ai]
 binding = "AI"
 
-#[vars]
-#JWT_SECRET = "your-jwt-secret-here"    # 替换为安全的密钥
+```
+
+本地开发需要在项目根目录创建不会提交到仓库的 `.dev.vars`：
+
+```bash
+cp .dev.vars.example .dev.vars
+openssl rand -hex 32
+```
+
+将生成的随机值写入 `.dev.vars`：
+
+```dotenv
+JWT_SECRET="生成的随机值"
 ```
 
 生产环境建议不要把真实密钥直接提交到仓库，可以使用：
@@ -314,6 +333,7 @@ npm run deploy
 仓库已内置 GitHub Actions 工作流：
 
 - 工作流文件：`.github/workflows/deploy.yml`
+- 完整配置与排错说明：[deploy.md](./deploy.md)
 - 触发方式：
   - 推送到 `main` 分支时自动部署
   - 在 GitHub Actions 页面手动执行 `workflow_dispatch`
@@ -322,6 +342,7 @@ npm run deploy
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `JWT_SECRET`
 
 建议步骤：
 
@@ -335,13 +356,16 @@ npm run deploy
 
 ```bash
 npm ci
+npm run admin:build
 node ./scripts/reconcile-remote-d1.mjs cfblog-db
 npx wrangler deploy
+npx wrangler secret list
 ```
 
 注意事项：
 
 - GitHub Actions 现在会在部署前执行远端 D1 schema 对账脚本
+- GitHub Actions 会构建 Vue 管理后台，不依赖仓库中已有的构建产物
 - `push -> main` 时默认自动迁移并部署
 - 手动触发 `workflow_dispatch` 时，可以通过 `apply_migrations` 选择是否先执行迁移
 - 工作流会先执行 `schema.sql`，再兼容处理历史 `sticky` 字段迁移，避免已有数据库因为重复列报错
@@ -349,6 +373,7 @@ npx wrangler deploy
 - `scripts/reconcile-remote-d1.mjs` 内部维护了一个 migration plan；以后新增“兼容老库”的迁移时，记得同步补一条检测规则
 - 如果你修改了 `schema.sql`，请同步整理对应的 `migrations/*.sql`，尤其是需要兼容旧库时
 - 已经应用到生产环境的迁移文件不要再修改，只新增新的迁移文件
+- 远端已有 `JWT_SECRET` 时不会覆盖；远端缺失时才从 GitHub Secret 写入
 - `RESEND_API_KEY` 需要通过 `wrangler secret put RESEND_API_KEY` 配置到 Worker，不需要放到 GitHub Actions Secrets
 
 ### 配置评论邮件通知
@@ -399,10 +424,17 @@ npx wrangler deploy
 npm run dev
 ```
 
+`npm run dev` 会先检查并构建 Vue 后台，再启动本地 Worker。单独开发后台界面时可运行：
+
+```bash
+npm run admin:dev
+```
+
 本地站点将运行在 http://127.0.0.1:8787
 
 - 前台首页: `http://127.0.0.1:8787/`
-- 后台管理: `http://127.0.0.1:8787/wp-admin`
+- 新版后台: `http://127.0.0.1:8787/wp-admin`
+- 兼容后台: `http://127.0.0.1:8787/wp-admin/legacy`
 - API Root: `http://127.0.0.1:8787/wp-json/`
 
 ## REST API

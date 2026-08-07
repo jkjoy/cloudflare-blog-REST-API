@@ -15,6 +15,24 @@ import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
 
 const categories = new Hono<AppEnv>();
 
+async function validateParent(db: D1Database, parent: number, currentId = 0): Promise<string | null> {
+  if (!Number.isInteger(parent) || parent < 0) return 'Invalid parent category.';
+  if (parent === 0) return null;
+
+  const visited = new Set<number>();
+  let cursor = parent;
+  while (cursor > 0) {
+    if (cursor === currentId || visited.has(cursor)) return 'Category hierarchy cannot contain a cycle.';
+    visited.add(cursor);
+    const ancestor = await db.prepare('SELECT id, parent_id FROM categories WHERE id = ?')
+      .bind(cursor)
+      .first<{ id: number; parent_id: number }>();
+    if (!ancestor) return 'Parent category does not exist.';
+    cursor = Number(ancestor.parent_id) || 0;
+  }
+  return null;
+}
+
 // GET /wp/v2/categories - List categories
 categories.get('/', async (c) => {
   try {
@@ -37,8 +55,8 @@ categories.get('/', async (c) => {
     const params: any[] = [];
 
     if (search) {
-      query += ' AND name LIKE ?';
-      params.push(`%${search}%`);
+      query += ' AND (name LIKE ? OR slug LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     if (slug) {
@@ -85,8 +103,8 @@ categories.get('/', async (c) => {
     let countQuery = 'SELECT COUNT(*) as count FROM categories WHERE 1=1';
     const countParams: any[] = [];
     if (search) {
-      countQuery += ' AND name LIKE ?';
-      countParams.push(`%${search}%`);
+      countQuery += ' AND (name LIKE ? OR slug LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
     }
     if (slug) {
       countQuery += ' AND slug = ?';
@@ -163,6 +181,10 @@ categories.post('/', authMiddleware, requireRole('administrator', 'editor'), asy
       return createWPError('rest_invalid_param', 'Name is required.', 400);
     }
 
+    const parentId = Number(parent) || 0;
+    const parentError = await validateParent(c.env.DB, parentId);
+    if (parentError) return createWPError('rest_invalid_param', parentError, 400);
+
     // Generate slug intelligently - use English directly, AI for Chinese
     let categorySlug = await generateSmartTagSlug(c.env, name, slug);
 
@@ -186,7 +208,7 @@ categories.post('/', authMiddleware, requireRole('administrator', 'editor'), asy
     const result = await c.env.DB.prepare(
       'INSERT INTO categories (name, slug, description, parent_id, created_at) VALUES (?, ?, ?, ?, ?)'
     )
-      .bind(name, categorySlug, description || '', parent || 0, now)
+      .bind(name, categorySlug, description || '', parentId, now)
       .run();
 
     const categoryId = result.meta.last_row_id;
@@ -266,8 +288,11 @@ categories.put('/:id', authMiddleware, requireRole('administrator', 'editor'), a
     }
 
     if (parent !== undefined) {
+      const parentId = Number(parent) || 0;
+      const parentError = await validateParent(c.env.DB, parentId, id);
+      if (parentError) return createWPError('rest_invalid_param', parentError, 400);
       updates.push('parent_id = ?');
-      params.push(parent);
+      params.push(parentId);
     }
 
     // If no fields to update, return current category
@@ -324,6 +349,10 @@ categories.delete('/:id', authMiddleware, requireRole('administrator', 'editor')
         'UPDATE post_categories SET category_id = 1 WHERE category_id = ?'
       )
         .bind(id)
+        .run();
+
+      await c.env.DB.prepare('UPDATE categories SET parent_id = ? WHERE parent_id = ?')
+        .bind(category.parent_id || 0, id)
         .run();
 
       await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();

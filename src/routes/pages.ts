@@ -49,6 +49,7 @@ pages.get('/', optionalAuthMiddleware, async (c) => {
     const perPage = parsePerPageParam(url.searchParams.get('per_page'), 20);
     const page = parsePageParam(url.searchParams.get('page'));
     const status = url.searchParams.get('status') || 'publish';
+    const search = url.searchParams.get('search')?.trim() || '';
     const offset = (page - 1) * perPage;
     const includeAllStatuses = status === 'all';
 
@@ -69,6 +70,12 @@ pages.get('/', optionalAuthMiddleware, async (c) => {
       params.push(status);
     }
 
+    if (search) {
+      query += ` AND (p.title LIKE ? OR p.content LIKE ? OR p.excerpt LIKE ? OR p.slug LIKE ?)`;
+      const pattern = `%${search}%`;
+      params.push(pattern, pattern, pattern, pattern);
+    }
+
     if (user && !['administrator', 'editor'].includes(user.role)) {
       query += ` AND p.author_id = ?`;
       params.push(user.userId);
@@ -85,6 +92,11 @@ pages.get('/', optionalAuthMiddleware, async (c) => {
     if (!includeAllStatuses) {
       countQuery += ` AND status = ?`;
       countParams.push(status);
+    }
+    if (search) {
+      countQuery += ` AND (title LIKE ? OR content LIKE ? OR excerpt LIKE ? OR slug LIKE ?)`;
+      const pattern = `%${search}%`;
+      countParams.push(pattern, pattern, pattern, pattern);
     }
     if (user && !['administrator', 'editor'].includes(user.role)) {
       countQuery += ` AND author_id = ?`;
@@ -303,6 +315,49 @@ pages.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async 
   }
 });
 
+// Restore page from trash
+pages.post('/:id/restore', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
+  const id = parseInt(c.req.param('id') || '');
+
+  try {
+    const settings = await getSiteSettings(c.env);
+    const baseUrl = settings.site_url || 'http://localhost:8787';
+    const page = await c.env.DB.prepare(`
+      SELECT * FROM posts WHERE id = ? AND post_type = 'page'
+    `).bind(id).first<Post>();
+
+    if (!page) {
+      return c.json({ code: 'rest_page_invalid', message: 'Invalid page ID.' }, 404);
+    }
+    if (page.status !== 'trash') {
+      return c.json({ code: 'rest_invalid_param', message: 'Page is not in trash.' }, 400);
+    }
+
+    const previousStatus = await c.env.DB.prepare(
+      'SELECT meta_value FROM post_meta WHERE post_id = ? AND meta_key = ? ORDER BY id DESC LIMIT 1'
+    ).bind(id, '_previous_status').first<{ meta_value: string | null }>();
+    const allowedStatuses = new Set(['publish', 'draft', 'pending', 'private']);
+    const status = previousStatus?.meta_value && allowedStatuses.has(previousStatus.meta_value)
+      ? previousStatus.meta_value
+      : 'draft';
+
+    await c.env.DB.prepare('UPDATE posts SET status = ?, updated_at = ? WHERE id = ?')
+      .bind(status, new Date().toISOString(), id)
+      .run();
+
+    const restoredPage = await c.env.DB.prepare(`
+      SELECT p.*, u.username as author_name
+      FROM posts p
+      LEFT JOIN users u ON p.author_id = u.id
+      WHERE p.id = ? AND p.post_type = 'page'
+    `).bind(id).first<PageWithAuthorRow>();
+
+    return c.json(formatPageResponse(restoredPage!, baseUrl));
+  } catch (error: any) {
+    return c.json({ code: 'rest_internal_error', message: error.message }, 500);
+  }
+});
+
 // Delete page
 pages.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), async (c) => {
   const id = parseInt(c.req.param('id') || '');
@@ -322,16 +377,24 @@ pages.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), asy
 
     if (force) {
       // Permanently delete
+      await c.env.DB.prepare('DELETE FROM post_meta WHERE post_id = ?').bind(id).run();
       await c.env.DB.prepare(`
         DELETE FROM posts WHERE id = ?
       `).bind(id).run();
 
       return c.json({ deleted: true, previous: page });
     } else {
+      await c.env.DB.prepare('DELETE FROM post_meta WHERE post_id = ? AND meta_key = ?')
+        .bind(id, '_previous_status')
+        .run();
+      await c.env.DB.prepare('INSERT INTO post_meta (post_id, meta_key, meta_value) VALUES (?, ?, ?)')
+        .bind(id, '_previous_status', page.status)
+        .run();
+
       // Move to trash
       await c.env.DB.prepare(`
-        UPDATE posts SET status = 'trash' WHERE id = ?
-      `).bind(id).run();
+        UPDATE posts SET status = 'trash', updated_at = ? WHERE id = ?
+      `).bind(new Date().toISOString(), id).run();
 
       const trashedPage = await c.env.DB.prepare(`
         SELECT * FROM posts WHERE id = ?

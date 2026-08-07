@@ -166,8 +166,13 @@ moments.get('/', optionalAuthMiddleware, async (c) => {
     const perPage = parsePerPageParam(c.req.query('per_page'), 10);
     const status = c.req.query('status') || 'publish';
     const author = c.req.query('author');
+    const search = String(c.req.query('search') || '').trim();
     const order = parseSqlOrder(c.req.query('order'), 'DESC');
     const includeAllStatuses = status === 'all';
+
+    if (!['all', 'publish', 'draft', 'trash'].includes(status)) {
+      return createWPError('rest_invalid_param', 'Invalid status.', 400);
+    }
 
     if ((includeAllStatuses || status !== 'publish') && !user) {
       return createWPError('rest_not_logged_in', 'You are not currently logged in.', 401);
@@ -193,6 +198,11 @@ moments.get('/', optionalAuthMiddleware, async (c) => {
       params.push(parseInt(author));
     }
 
+    if (search) {
+      query += ' AND content LIKE ?';
+      params.push(`%${search}%`);
+    }
+
     query += ` ORDER BY created_at ${order} LIMIT ? OFFSET ?`;
     params.push(perPage, offset);
 
@@ -211,6 +221,10 @@ moments.get('/', optionalAuthMiddleware, async (c) => {
     if (author) {
       countQuery += ' AND author_id = ?';
       countParams.push(parseInt(author));
+    }
+    if (search) {
+      countQuery += ' AND content LIKE ?';
+      countParams.push(`%${search}%`);
     }
     const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first();
     const total = (countResult as any)?.total || 0;
@@ -755,13 +769,20 @@ moments.get('/:id', optionalAuthMiddleware, async (c) => {
       return createWPError('moment_not_found', 'Moment not found', 404);
     }
 
+    const user = (c as any).get('user') as JWTPayload | undefined;
+    if ((moment as any).status !== 'publish' && !canViewNonPublicContent(user, Number((moment as any).author_id))) {
+      return createWPError('moment_not_found', 'Moment not found', 404);
+    }
+
     const author = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
       .bind((moment as any).author_id)
       .first();
 
-    await c.env.DB.prepare('UPDATE moments SET view_count = view_count + 1 WHERE id = ?')
-      .bind(id)
-      .run();
+    if (!user) {
+      await c.env.DB.prepare('UPDATE moments SET view_count = view_count + 1 WHERE id = ?')
+        .bind(id)
+        .run();
+    }
 
     return c.json(
       formatMomentResponse(moment, author, baseUrl, adminAvatarUrl, settings?.gravatar_base_url)

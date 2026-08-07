@@ -317,10 +317,12 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       .all<{ tag_id: number }>();
     const tagIds = tagResult.results.map((r) => r.tag_id);
 
-    // Increment view count
-    await c.env.DB.prepare('UPDATE posts SET view_count = view_count + 1 WHERE id = ?')
-      .bind(id)
-      .run();
+    // Admin/editor loads should not inflate public view counts.
+    if (!user) {
+      await c.env.DB.prepare('UPDATE posts SET view_count = view_count + 1 WHERE id = ?')
+        .bind(id)
+        .run();
+    }
 
     return c.json(formatPostResponse(post, baseUrl, categoryIds, tagIds));
   } catch (error: any) {

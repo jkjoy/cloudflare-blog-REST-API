@@ -559,6 +559,9 @@ users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => 
         await c.env.DB.prepare('UPDATE posts SET author_id = ? WHERE author_id = ?')
           .bind(parseInt(reassign), id)
           .run();
+        await c.env.DB.prepare('UPDATE moments SET author_id = ? WHERE author_id = ?')
+          .bind(parseInt(reassign), id)
+          .run();
       } else {
         // Delete user's posts
         await c.env.DB.prepare('DELETE FROM posts WHERE author_id = ?').bind(id).run();
