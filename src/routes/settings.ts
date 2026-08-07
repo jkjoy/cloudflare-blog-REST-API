@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../types'
-import { clearSettingsCache } from '../utils'
+import { clearSettingsCache, normalizeGravatarBaseUrl } from '../utils'
 import { authMiddleware, requireRole } from '../auth'
 
 const settings = new Hono<AppEnv>()
@@ -10,6 +10,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'site_description',
   'site_keywords',
   'site_author',
+  'gravatar_base_url',
   'home_posts_per_page',
   'comment_turnstile_enabled',
   'comment_turnstile_site_key',
@@ -110,13 +111,17 @@ settings.put('/', authMiddleware, requireRole('administrator'), async (c) => {
     const updates = Object.entries(body)
 
     for (const [key, value] of updates) {
+      const settingValue = key === 'gravatar_base_url'
+        ? normalizeGravatarBaseUrl(value)
+        : value as string
+
       await c.env.DB.prepare(`
         INSERT INTO site_settings (setting_key, setting_value, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(setting_key) DO UPDATE SET
           setting_value = excluded.setting_value,
           updated_at = CURRENT_TIMESTAMP
-      `).bind(key, value as string).run()
+      `).bind(key, settingValue).run()
     }
 
     // Clear settings cache
@@ -137,6 +142,9 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
   try {
     const key = c.req.param('key')
     const { value } = await c.req.json()
+    const settingValue = key === 'gravatar_base_url'
+      ? normalizeGravatarBaseUrl(value)
+      : value
 
     await c.env.DB.prepare(`
       INSERT INTO site_settings (setting_key, setting_value, updated_at)
@@ -144,7 +152,7 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
       ON CONFLICT(setting_key) DO UPDATE SET
         setting_value = excluded.setting_value,
         updated_at = CURRENT_TIMESTAMP
-    `).bind(key, value).run()
+    `).bind(key, settingValue).run()
 
     // Clear settings cache
     clearSettingsCache()
@@ -152,7 +160,7 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
     return c.json({
       success: true,
       key,
-      value
+      value: settingValue
     })
   } catch (error) {
     console.error('Error updating setting:', error)

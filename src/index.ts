@@ -578,6 +578,7 @@ app.get('/wp-admin', async (c) => {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
       background: #f0f0f1;
       color: #2c3338;
+      -webkit-font-smoothing: antialiased;
     }
     #app {
       display: flex;
@@ -591,6 +592,7 @@ app.get('/wp-admin', async (c) => {
       position: fixed;
       height: 100vh;
       overflow-y: auto;
+      overscroll-behavior: contain;
     }
     .sidebar-header {
       padding: 20px;
@@ -678,9 +680,13 @@ app.get('/wp-admin', async (c) => {
       font-size: 32px;
       font-weight: 300;
       color: #1e1e1e;
+      font-variant-numeric: tabular-nums;
     }
     .button {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
       padding: 8px 16px;
       background: #2271b1;
       color: #fff;
@@ -689,9 +695,21 @@ app.get('/wp-admin', async (c) => {
       border: none;
       cursor: pointer;
       font-size: 13px;
+      transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
     }
     .button:hover {
       background: #135e96;
+    }
+    .button:active {
+      transform: scale(0.96);
+    }
+    .button:focus-visible,
+    .close-button:focus-visible,
+    .mobile-menu-toggle:focus-visible,
+    .action-link:focus-visible,
+    .sidebar-menu a:focus-visible {
+      outline: 2px solid #72aee6;
+      outline-offset: 2px;
     }
     .button-secondary {
       background: #f0f0f1;
@@ -914,6 +932,11 @@ app.get('/wp-admin', async (c) => {
       align-items: center;
       margin-bottom: 20px;
     }
+    .page-header h2,
+    .modal-header h2,
+    .welcome-panel h2 {
+      text-wrap: balance;
+    }
     .page-header-actions {
       display: flex;
       align-items: center;
@@ -970,7 +993,7 @@ app.get('/wp-admin', async (c) => {
       background: #fff;
       border: 1px solid #c3c4c7;
       border-radius: 4px;
-      overflow: 隐藏;
+      overflow: hidden;
     }
     table {
       width: 100%;
@@ -986,6 +1009,7 @@ app.get('/wp-admin', async (c) => {
     table td {
       padding: 12px;
       border-bottom: 1px solid #f0f0f1;
+      vertical-align: middle;
     }
     table tr:hover {
       background: #f6f7f7;
@@ -1057,6 +1081,8 @@ app.get('/wp-admin', async (c) => {
       line-height: 1;
       flex-shrink: 0;
       padding: 4px;
+      width: 40px;
+      height: 40px;
     }
     .close-button:hover {
       color: #1d2327;
@@ -1235,40 +1261,87 @@ app.get('/wp-admin', async (c) => {
 
     /* Mobile Responsive Styles */
     @media (max-width: 768px) {
+      body.mobile-menu-open {
+        overflow: hidden;
+      }
       .sidebar {
         position: fixed;
-        left: -160px;
-        transition: left 0.3s ease;
+        left: min(-82vw, -280px);
+        width: min(82vw, 300px);
+        transition: left 0.24s cubic-bezier(0.2, 0, 0, 1);
         z-index: 1000;
+        box-shadow: 14px 0 34px rgba(0, 0, 0, 0.22);
       }
       .sidebar.open {
         left: 0;
       }
+      .sidebar-header {
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        text-align: left;
+      }
+      .sidebar-menu {
+        padding: 8px;
+      }
+      .sidebar-menu a {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 10px 14px;
+        border-radius: 4px;
+      }
       .main-content {
         margin-left: 0;
+        min-width: 0;
       }
       .top-bar {
-        padding: 10px 15px;
-        flex-wrap: wrap;
-        gap: 10px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        min-height: 58px;
+        padding: 8px 12px;
+        flex-wrap: nowrap;
+        gap: 8px;
+        box-shadow: 0 1px 8px rgba(29, 35, 39, 0.08);
       }
       .top-bar h1 {
+        min-width: 0;
+        flex: 1;
         font-size: 18px;
-        width: 100%;
-        order: 2;
+        font-weight: 500;
+        width: auto;
+        order: initial;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .user-info {
-        width: 100%;
-        justify-content: space-between;
-        order: 1;
+        width: auto;
+        order: initial;
+        flex: 0 0 auto;
+      }
+      .user-info > span {
+        display: none;
+      }
+      .user-info .button {
+        min-height: 40px;
+        padding: 7px 11px;
       }
       .content-area {
-        padding: 15px;
+        width: 100%;
+        min-width: 0;
+        padding: 14px 12px 28px;
       }
       .page-header {
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
         align-items: flex-start;
+      }
+      .page-header h2 {
+        font-size: 20px;
+        line-height: 1.3;
       }
       .page-header .button {
         width: 100%;
@@ -1278,34 +1351,83 @@ app.get('/wp-admin', async (c) => {
       .search-form {
         width: 100%;
       }
+      .page-header-actions {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .page-header-actions > .button {
+        margin-left: 0 !important;
+      }
       .search-input {
         flex: 1;
         min-width: 0;
+        min-height: 42px;
       }
       .search-form .button {
         width: auto;
+        min-height: 42px;
+      }
+      .page-header-actions > select {
+        min-height: 42px;
       }
       .pagination-bar {
         align-items: stretch;
         flex-direction: column;
+        padding-bottom: env(safe-area-inset-bottom);
       }
       .pagination-actions {
-        justify-content: flex-end;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .pagination-button {
+        min-height: 42px;
       }
       .table-container {
         overflow-x: auto;
+        max-width: calc(100vw - 24px);
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-inline: contain;
       }
       table {
-        min-width: 600px;
+        min-width: 680px;
+      }
+      table th,
+      table td {
+        padding: 11px 10px;
+      }
+      table th:first-child,
+      table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: #fff;
+        box-shadow: 1px 0 0 #dcdcde, 8px 0 12px rgba(29, 35, 39, 0.04);
+      }
+      table th:first-child {
+        z-index: 2;
+        background: #f6f7f7;
+      }
+      .modal {
+        align-items: flex-end;
+        padding-top: max(12px, env(safe-area-inset-top));
       }
       .modal-content {
-        --modal-padding: 20px;
-        --modal-padding-negative: -20px;
-        width: 95%;
+        --modal-padding: 18px;
+        --modal-padding-negative: -18px;
+        width: 100%;
         max-width: none;
-        max-height: 95vh;
-        margin: 10px;
-        padding: var(--modal-padding);
+        max-height: calc(100dvh - 12px);
+        margin: 0;
+        padding: var(--modal-padding) var(--modal-padding) max(var(--modal-padding), env(safe-area-inset-bottom));
+        border-radius: 8px 8px 0 0;
+      }
+      .modal-header {
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+      .modal-header h2 {
+        font-size: 19px;
       }
       .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -1327,10 +1449,18 @@ app.get('/wp-admin', async (c) => {
       .form-group textarea,
       .form-group select {
         font-size: 16px;
+        min-height: 44px;
       }
       .actions {
-        flex-direction: column;
-        gap: 5px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 2px 10px;
+      }
+      .action-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 4px 0;
       }
       .checkbox-group {
         max-height: 120px;
@@ -1351,7 +1481,10 @@ app.get('/wp-admin', async (c) => {
         font-size: 26px;
       }
       .auth-panel-footer {
-        padding-top: 24px;
+        display: none;
+      }
+      .auth-status-list {
+        display: none;
       }
       .login-form {
         padding: 28px;
@@ -1370,12 +1503,53 @@ app.get('/wp-admin', async (c) => {
         flex-direction: column;
         gap: 5px;
       }
+      .EasyMDEContainer .editor-toolbar {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      .EasyMDEContainer .editor-toolbar button {
+        flex: 0 0 40px;
+        min-height: 40px;
+      }
+      .EasyMDEContainer .CodeMirror {
+        min-height: 42dvh;
+      }
+      .admin-split-layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+      .settings-shell {
+        max-width: none !important;
+      }
+      .settings-language-card,
+      .settings-form {
+        padding: 20px !important;
+      }
+      .settings-checkbox-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+      }
+      .toast {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+      }
+      .toast-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin: -8px;
+      }
     }
 
     @media (max-width: 480px) {
-      .stats-grid {
-        grid-template-columns: 1fr;
-      }
       .button-group {
         flex-direction: column;
       }
@@ -1387,7 +1561,7 @@ app.get('/wp-admin', async (c) => {
       }
       .auth-panel,
       .login-form {
-        padding: 22px;
+        padding: 20px;
       }
       .auth-panel h1,
       .login-form h1 {
@@ -1395,6 +1569,13 @@ app.get('/wp-admin', async (c) => {
       }
       .auth-status-list {
         margin-top: 22px;
+      }
+      .stat-card {
+        min-width: 0;
+        padding: 13px 8px;
+      }
+      .stat-card h3 {
+        overflow-wrap: anywhere;
       }
     }
 
@@ -1404,7 +1585,9 @@ app.get('/wp-admin', async (c) => {
       background: #2271b1;
       color: white;
       border: none;
-      padding: 8px 12px;
+      width: 42px;
+      height: 42px;
+      padding: 0;
       border-radius: 4px;
       cursor: pointer;
       font-size: 18px;
@@ -1417,7 +1600,7 @@ app.get('/wp-admin', async (c) => {
 
     /* Sidebar overlay for mobile */
     .sidebar-overlay {
-      display: none;
+      display: block;
       position: fixed;
       top: 0;
       left: 0;
@@ -1425,9 +1608,23 @@ app.get('/wp-admin', async (c) => {
       bottom: 0;
       background: rgba(0,0,0,0.5);
       z-index: 999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.24s cubic-bezier(0.2, 0, 0, 1), visibility 0.24s;
     }
     .sidebar-overlay.show {
-      display: block;
+      opacity: 1;
+      visibility: visible;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sidebar,
+      .sidebar-overlay,
+      .button,
+      .toast,
+      .toast.removing {
+        transition: none;
+        animation: none;
+      }
     }
   </style>
 </head>
@@ -1536,6 +1733,8 @@ app.get('/wp-admin', async (c) => {
             siteUrlHint: '填写站点完整 URL，不要包含末尾斜杠。它也会作为 WordPress API 的 home URL。',
             adminEmail: '管理员邮箱',
             adminEmailHint: '该邮箱将用于接收后台通知。',
+            gravatarBaseUrl: '头像镜像地址',
+            gravatarBaseUrlHint: '用于加载 Gravatar 头像。可填写镜像站点根地址或完整的 /avatar 地址。',
             emailNotifications: '邮件通知',
             fromName: '发件人名称',
             fromNameHint: '通知邮件中显示的发件人名称。',
@@ -1677,6 +1876,8 @@ app.get('/wp-admin', async (c) => {
             siteUrlHint: 'Enter the full site URL without a trailing slash. It is also used as the home URL in the WordPress API.',
             adminEmail: 'Admin Email',
             adminEmailHint: 'This email will be used for administrative notifications.',
+            gravatarBaseUrl: 'Avatar Mirror URL',
+            gravatarBaseUrlHint: 'Used to load Gravatar avatars. Enter a mirror root URL or its full /avatar URL.',
             emailNotifications: 'Email Notifications',
             fromName: 'From Name',
             fromNameHint: 'The sender name shown in notification emails.',
@@ -3575,7 +3776,7 @@ app.get('/wp-admin', async (c) => {
               <h2>Media Details</h2>
               <button class="close-button" onclick="this.closest('.modal').remove()">&times;</button>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="admin-split-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
               <div>
                 \${media.media_type === 'image'
                   ? \`<img src="\${media.source_url}" alt="\${media.alt_text}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">\`
@@ -4547,8 +4748,8 @@ app.get('/wp-admin', async (c) => {
     function renderLayout(title) {
       const app = document.getElementById('app');
       app.innerHTML = \`
-        <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
-        <div class="sidebar">
+        <div class="sidebar-overlay" onclick="closeMobileMenu()"></div>
+        <div class="sidebar" id="admin-sidebar">
           <div class="sidebar-header">${siteTitle}</div>
           <ul class="sidebar-menu">
             <li><a href="#" data-route="/" class="active">\${i18n.t('nav.dashboard')}</a></li>
@@ -4567,7 +4768,7 @@ app.get('/wp-admin', async (c) => {
         </div>
         <div class="main-content">
           <div class="top-bar">
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+            <button type="button" class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="\${i18n.currentLang === 'zh' ? '打开导航菜单' : 'Open navigation menu'}" aria-controls="admin-sidebar" aria-expanded="false">☰</button>
             <h1>\${title}</h1>
             <div class="user-info">
               <span>\${currentUser.name}</span>
@@ -4583,9 +4784,7 @@ app.get('/wp-admin', async (c) => {
         a.addEventListener('click', (e) => {
           e.preventDefault();
           navigate(a.getAttribute('data-route'));
-          // Close mobile menu after navigation
-          document.querySelector('.sidebar').classList.remove('open');
-          document.querySelector('.sidebar-overlay').classList.remove('show');
+          closeMobileMenu();
         });
       });
     }
@@ -4594,9 +4793,31 @@ app.get('/wp-admin', async (c) => {
     window.toggleMobileMenu = function() {
       const sidebar = document.querySelector('.sidebar');
       const overlay = document.querySelector('.sidebar-overlay');
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('show');
+      const willOpen = !sidebar?.classList.contains('open');
+      sidebar?.classList.toggle('open', willOpen);
+      overlay?.classList.toggle('show', willOpen);
+      document.body.classList.toggle('mobile-menu-open', willOpen);
+      document.querySelector('.mobile-menu-toggle')?.setAttribute('aria-expanded', String(willOpen));
     };
+
+    window.closeMobileMenu = function() {
+      document.querySelector('.sidebar')?.classList.remove('open');
+      document.querySelector('.sidebar-overlay')?.classList.remove('show');
+      document.body.classList.remove('mobile-menu-open');
+      document.querySelector('.mobile-menu-toggle')?.setAttribute('aria-expanded', 'false');
+    };
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeMobileMenu();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        closeMobileMenu();
+      }
+    });
 
     // Language switcher function
     window.switchLanguage = function(lang) {
@@ -6004,7 +6225,7 @@ https://example.com/image2.jpg"></textarea>
           <div style="color: #646970; line-height: 1.7;">\${i18n.t('import.formatHint')}</div>
         </div>
 
-        <div style="display: grid; gap: 20px; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); align-items: start;">
+        <div class="admin-split-layout" style="display: grid; gap: 20px; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); align-items: start;">
           <form id="import-form" style="background: white; padding: 24px; border: 1px solid #c3c4c7; border-radius: 4px;">
             <div class="form-group">
               <label>\${i18n.t('import.fileLabel')}</label>
@@ -6377,9 +6598,9 @@ https://example.com/image2.jpg"></textarea>
 
         const container = document.getElementById('settings-container');
         container.innerHTML = \`
-          <div style="max-width: 800px;">
+          <div class="settings-shell" style="max-width: 800px;">
             <!-- Language Settings -->
-            <div style="background: white; padding: 20px 30px; border: 1px solid #c3c4c7; border-radius: 4px; margin-bottom: 20px;">
+            <div class="settings-language-card" style="background: white; padding: 20px 30px; border: 1px solid #c3c4c7; border-radius: 4px; margin-bottom: 20px;">
               <h3 style="margin: 0 0 15px 0; color: #1d2327;">\${i18n.t('settings.language') || '界面语言'}</h3>
               <div class="form-group" style="margin-bottom: 0;">
                 <select id="admin-lang-select" onchange="switchLanguage(this.value)" style="padding: 10px; min-width: 200px;">
@@ -6390,7 +6611,7 @@ https://example.com/image2.jpg"></textarea>
               </div>
             </div>
 
-            <form id="settings-form" style="background: white; padding: 30px; border: 1px solid #c3c4c7; border-radius: 4px;">
+            <form id="settings-form" class="settings-form" style="background: white; padding: 30px; border: 1px solid #c3c4c7; border-radius: 4px;">
               <div class="form-group">
                 <label>\${i18n.t('settings.siteTitle')} *</label>
                 <input type="text" name="site_title" value="\${settings.site_title || ''}" required>
@@ -6409,6 +6630,12 @@ https://example.com/image2.jpg"></textarea>
                 <label>\${i18n.t('settings.adminEmail')} *</label>
                 <input type="email" name="admin_email" value="\${settings.admin_email || ''}" required placeholder="admin@example.com">
                 <small style="color: #646970; display: block; margin-top: 5px;">\${i18n.t('settings.adminEmailHint')}</small>
+              </div>
+
+              <div class="form-group">
+                <label>\${i18n.t('settings.gravatarBaseUrl')}</label>
+                <input type="url" name="gravatar_base_url" value="\${settings.gravatar_base_url || 'https://cn.cravatar.com/avatar'}" placeholder="https://cn.cravatar.com/avatar">
+                <small style="color: #646970; display: block; margin-top: 5px;">\${i18n.t('settings.gravatarBaseUrlHint')}</small>
               </div>
 
 	              <div class="form-group">
@@ -6642,7 +6869,7 @@ https://example.com/image2.jpg"></textarea>
                   <div style="margin-bottom: 10px;">
                     <strong style="font-size: 13px; color: #2c3338;">\${i18n.t('settings.webhookEventsSelect')}</strong>
                   </div>
-                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                  <div class="settings-checkbox-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
                     <label style="display: flex; align-items: center; padding: 5px 0; font-weight: 400;">
                       <input type="checkbox" name="webhook_events" value="post.created" \${(settings.webhook_events || '').includes('post.created') ? 'checked' : ''} style="width: auto; margin-right: 8px;">
                       post.created (\${i18n.t('settings.webhookEventPostCreated')})
@@ -6708,6 +6935,7 @@ https://example.com/image2.jpg"></textarea>
             site_title: formData.get('site_title'),
             site_url: formData.get('site_url'),
             admin_email: formData.get('admin_email'),
+            gravatar_base_url: formData.get('gravatar_base_url'),
             mail_from_name: formData.get('mail_from_name'),
             mail_from_email: formData.get('mail_from_email'),
             mail_notifications_enabled: formData.get('mail_notifications_enabled') ? '1' : '0',

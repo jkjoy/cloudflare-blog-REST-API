@@ -5,6 +5,7 @@ let settingsCache: Record<string, any> | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 60000; // 1 minute
 const AI_TEXT_MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8' as const;
+export const DEFAULT_GRAVATAR_BASE_URL = 'https://cn.cravatar.com/avatar';
 
 export function parsePageParam(value: unknown, fallback = 1): number {
   const parsed = parseInt(String(value ?? '').trim(), 10);
@@ -62,6 +63,7 @@ export async function getSiteSettings(env: Env): Promise<Record<string, any>> {
       site_description: '基于 Cloudflare Workers + D1 + R2 构建的现代化博客系统',
       site_url: 'http://localhost:8787',
       admin_email: 'admin@example.com',
+      gravatar_base_url: DEFAULT_GRAVATAR_BASE_URL,
       home_posts_per_page: '15',
       comment_turnstile_enabled: '0',
       comment_turnstile_site_key: '',
@@ -99,6 +101,7 @@ export async function getSiteSettings(env: Env): Promise<Record<string, any>> {
       site_description: '基于 Cloudflare Workers + D1 + R2 构建的现代化博客系统',
       site_url: 'http://localhost:8787',
       admin_email: 'admin@example.com',
+      gravatar_base_url: DEFAULT_GRAVATAR_BASE_URL,
       home_posts_per_page: '15',
       comment_turnstile_enabled: '0',
       comment_turnstile_site_key: '',
@@ -131,6 +134,42 @@ export function clearSettingsCache(): void {
 // Normalize base URL by removing trailing slash
 export function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/$/, '');
+}
+
+export function normalizeGravatarBaseUrl(value: unknown): string {
+  const configuredUrl = String(value || '').trim();
+  if (!configuredUrl) {
+    return DEFAULT_GRAVATAR_BASE_URL;
+  }
+
+  try {
+    const url = new URL(configuredUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return DEFAULT_GRAVATAR_BASE_URL;
+    }
+
+    url.search = '';
+    url.hash = '';
+    const pathname = url.pathname.replace(/\/+$/, '');
+    url.pathname = pathname && pathname !== '/' ? pathname : '/avatar';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return DEFAULT_GRAVATAR_BASE_URL;
+  }
+}
+
+export function buildGravatarUrl(
+  emailHash: string,
+  size = 96,
+  baseUrl: unknown = DEFAULT_GRAVATAR_BASE_URL,
+  defaultImage = 'mm'
+): string {
+  const params = new URLSearchParams({
+    s: String(size),
+    d: defaultImage,
+    r: 'g'
+  });
+  return `${normalizeGravatarBaseUrl(baseUrl)}/${encodeURIComponent(emailHash)}?${params.toString()}`;
 }
 
 // MD5 hash function for Gravatar (pure JavaScript implementation)
@@ -500,7 +539,12 @@ export function formatMediaResponse(media: Media, baseUrl: string): MediaRespons
 }
 
 // Convert database User to WordPress REST API response format
-export async function formatUserResponse(user: User, baseUrl: string, isAdmin: boolean = false): Promise<UserResponse> {
+export async function formatUserResponse(
+  user: User,
+  baseUrl: string,
+  isAdmin: boolean = false,
+  gravatarBaseUrl?: unknown
+): Promise<UserResponse> {
   baseUrl = normalizeBaseUrl(baseUrl);
 
   // Generate Gravatar hash from email
@@ -514,9 +558,9 @@ export async function formatUserResponse(user: User, baseUrl: string, isAdmin: b
     link: `${baseUrl}/author/${user.username}`,
     slug: user.username,
     avatar_urls: {
-      24: user.avatar_url || `https://www.gravatar.com/avatar/${emailHash}?s=24&d=mm&r=g`,
-      48: user.avatar_url || `https://www.gravatar.com/avatar/${emailHash}?s=48&d=mm&r=g`,
-      96: user.avatar_url || `https://www.gravatar.com/avatar/${emailHash}?s=96&d=mm&r=g`
+      24: user.avatar_url || buildGravatarUrl(emailHash, 24, gravatarBaseUrl),
+      48: user.avatar_url || buildGravatarUrl(emailHash, 48, gravatarBaseUrl),
+      96: user.avatar_url || buildGravatarUrl(emailHash, 96, gravatarBaseUrl)
     },
     roles: [user.role],
     role: user.role, // For backward compatibility
@@ -558,7 +602,8 @@ export async function formatCommentResponse(
   baseUrl: string,
   postSlug?: string,
   isAdmin: boolean = false,
-  postTitle?: string
+  postTitle?: string,
+  gravatarBaseUrl?: unknown
 ): Promise<CommentResponse> {
   baseUrl = normalizeBaseUrl(baseUrl);
 
@@ -583,9 +628,9 @@ export async function formatCommentResponse(
     status: comment.status,
     type: 'comment',
     author_avatar_urls: {
-      24: `https://www.gravatar.com/avatar/${emailHash}?s=24&d=mm&r=g`,
-      48: `https://www.gravatar.com/avatar/${emailHash}?s=48&d=mm&r=g`,
-      96: `https://www.gravatar.com/avatar/${emailHash}?s=96&d=mm&r=g`
+      24: buildGravatarUrl(emailHash, 24, gravatarBaseUrl),
+      48: buildGravatarUrl(emailHash, 48, gravatarBaseUrl),
+      96: buildGravatarUrl(emailHash, 96, gravatarBaseUrl)
     },
     meta: [],
     _links: generateCommentLinks(comment, baseUrl)

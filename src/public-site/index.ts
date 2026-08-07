@@ -4,7 +4,7 @@ import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 import type { AppEnv, Env } from '../types';
 import { getPublicCommentProtectionSettings } from '../comment-security';
-import { getSiteSettings, md5, normalizeBaseUrl } from '../utils';
+import { buildGravatarUrl, getSiteSettings, md5, normalizeBaseUrl } from '../utils';
 import { PUBLIC_SITE_CSS, PUBLIC_SITE_JS } from './assets';
 
 marked.use({
@@ -26,6 +26,7 @@ interface SiteMeta {
   description: string;
   faviconUrl: string;
   footerHtml: string;
+  gravatarBaseUrl: string;
   headHtml: string;
   homePostsPerPage: number;
   icp: string;
@@ -688,7 +689,12 @@ async function renderContentBySlug(c: AppContext): Promise<Response> {
   }
 
   const [comments, related] = await Promise.all([
-    getCommentsForPost(c.env, detail.id, common.site.adminEmail),
+    getCommentsForPost(
+      c.env,
+      detail.id,
+      common.site.adminEmail,
+      common.site.gravatarBaseUrl
+    ),
     getRelatedPosts(c.env, common.site, detail.id, detail.categories.map((item) => item.id)),
   ]);
 
@@ -920,8 +926,9 @@ async function getSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
     '基于 Cloudflare Workers 的前后端一体化博客系统。';
   const authorName = String(rawSettings.site_author || '').trim() || title;
   const adminEmail = normalizeEmail(rawSettings.admin_email);
+  const gravatarBaseUrl = String(rawSettings.gravatar_base_url || '');
   const adminAvatarUrl = adminEmail
-    ? `https://cn.cravatar.com/avatar/${await md5(adminEmail)}?s=96&d=mp&r=g`
+    ? buildGravatarUrl(await md5(adminEmail), 96, gravatarBaseUrl, 'mp')
     : '';
   const faviconUrl = normalizeOptionalUrl(rawSettings.site_favicon);
   const logoUrl =
@@ -945,6 +952,7 @@ async function getSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
     footerHtml:
       String(rawSettings.site_footer_text || '').trim() ||
       '© CFBlog. Powered by Cloudflare Workers.',
+    gravatarBaseUrl,
     headHtml: String(rawSettings.head_html || ''),
     homePostsPerPage,
     icp: String(rawSettings.site_icp || '').trim(),
@@ -1417,6 +1425,7 @@ async function getCommentsForPost(
   env: Env,
   postId: number,
   adminEmail: string,
+  gravatarBaseUrl: string,
 ): Promise<CommentNode[]> {
   const result = await env.DB.prepare(`
     SELECT c.id, c.author_name, c.author_email, c.author_url, c.content, c.created_at, c.parent_id,
@@ -1440,7 +1449,7 @@ async function getCommentsForPost(
       avatar_url:
         String(row.user_avatar_url || '').trim() ||
         (emailHash
-          ? `https://cn.cravatar.com/avatar/${emailHash}?s=96&d=mp&r=g`
+          ? buildGravatarUrl(emailHash, 96, gravatarBaseUrl, 'mp')
           : createMonogramDataUri(String(row.author_name || '匿名'))),
     };
   }));
@@ -1579,7 +1588,12 @@ async function getMoments(
   `).bind(perPage, offset).all<RawMomentRow>();
 
   const rows = result.results || [];
-  const commentMap = await getMomentCommentMap(env, rows.map((row) => Number(row.id)), site.adminEmail);
+  const commentMap = await getMomentCommentMap(
+    env,
+    rows.map((row) => Number(row.id)),
+    site.adminEmail,
+    site.gravatarBaseUrl
+  );
 
   return {
     items: rows.map((row) => ({
@@ -1607,6 +1621,7 @@ async function getMomentCommentMap(
   env: Env,
   momentIds: number[],
   adminEmail: string,
+  gravatarBaseUrl: string,
 ): Promise<Map<number, MomentCommentNode[]>> {
   const map = new Map<number, MomentCommentNode[]>();
   if (!momentIds.length) {
@@ -1629,7 +1644,7 @@ async function getMomentCommentMap(
       const emailHash = row.author_email ? await md5(String(row.author_email)) : '';
       const node: MomentCommentNode = {
         avatarUrl: emailHash
-          ? `https://cn.cravatar.com/avatar/${emailHash}?s=96&d=mp&r=g`
+          ? buildGravatarUrl(emailHash, 96, gravatarBaseUrl, 'mp')
           : createMonogramDataUri(String(row.author_name || '匿名')),
         isAdminAuthor: !!adminEmail && normalizeEmail(row.author_email) === adminEmail,
         authorName: String(row.author_name || '匿名访客'),

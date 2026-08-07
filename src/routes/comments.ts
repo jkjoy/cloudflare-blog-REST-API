@@ -154,7 +154,8 @@ comments.get('/', optionalAuthMiddleware, async (c) => {
           baseUrl,
           comment.post_slug,
           isAdmin,
-          comment.post_title ?? undefined
+          comment.post_title ?? undefined,
+          settings.gravatar_base_url
         );
       })
     );
@@ -205,7 +206,8 @@ comments.get('/:id', optionalAuthMiddleware, async (c) => {
       baseUrl,
       comment.post_slug,
       isAdmin,
-      comment.post_title ?? undefined
+      comment.post_title ?? undefined,
+      settings.gravatar_base_url
     );
 
     return c.json(formattedComment);
@@ -398,7 +400,8 @@ comments.post('/', optionalAuthMiddleware, async (c) => {
       baseUrl,
       newComment.post_slug,
       false,
-      newComment.post_title ?? undefined
+      newComment.post_title ?? undefined,
+      settings.gravatar_base_url
     );
 
     // Trigger webhook for comment creation
@@ -507,7 +510,8 @@ comments.put('/:id', authMiddleware, async (c) => {
         baseUrl,
         commentWithPost.post_slug,
         isAdmin,
-        commentWithPost.post_title ?? undefined
+        commentWithPost.post_title ?? undefined,
+        settings.gravatar_base_url
       );
       return c.json(formattedComment);
     }
@@ -540,7 +544,8 @@ comments.put('/:id', authMiddleware, async (c) => {
       baseUrl,
       updatedComment.post_slug,
       isAdmin,
-      updatedComment.post_title ?? undefined
+      updatedComment.post_title ?? undefined,
+      settings.gravatar_base_url
     );
 
     // Trigger webhook for comment update
@@ -596,7 +601,8 @@ comments.delete('/:id', authMiddleware, async (c) => {
         baseUrl,
         comment.post_slug,
         isAdmin,
-        comment.post_title ?? undefined
+        comment.post_title ?? undefined,
+        settings.gravatar_base_url
       );
 
       // Trigger webhook for comment deletion
@@ -627,7 +633,8 @@ comments.delete('/:id', authMiddleware, async (c) => {
         baseUrl,
         trashedComment.post_slug,
         isAdmin,
-        trashedComment.post_title ?? undefined
+        trashedComment.post_title ?? undefined,
+        settings.gravatar_base_url
       );
 
       // Trigger webhook for comment update

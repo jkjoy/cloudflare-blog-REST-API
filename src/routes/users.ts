@@ -109,7 +109,7 @@ users.post('/login', async (c) => {
 
     return c.json({
       token,
-      user: await formatUserResponse(user, baseUrl, true),
+      user: await formatUserResponse(user, baseUrl, true, settings.gravatar_base_url),
       user_email: user.email,
       user_nicename: user.username,
       user_display_name: user.display_name || user.username
@@ -194,7 +194,7 @@ users.post('/register', async (c) => {
     return c.json(
       {
         token,
-        user: await formatUserResponse(createdUser!, baseUrl, true)
+        user: await formatUserResponse(createdUser!, baseUrl, true, settings.gravatar_base_url)
       },
       201
     );
@@ -221,7 +221,7 @@ users.get('/me', authMiddleware, async (c) => {
 
     delete dbUser.password;
 
-    return c.json(await formatUserResponse(dbUser, baseUrl, true));
+    return c.json(await formatUserResponse(dbUser, baseUrl, true, settings.gravatar_base_url));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -294,7 +294,7 @@ users.get('/', optionalAuthMiddleware, async (c) => {
 
     const formattedUsers = await Promise.all(result.results.map(async (user) => {
       delete user.password;
-      return await formatUserResponse(user, baseUrl, isAdmin);
+      return await formatUserResponse(user, baseUrl, isAdmin, settings.gravatar_base_url);
     }));
 
     // Add pagination headers
@@ -338,7 +338,7 @@ users.get('/:id', optionalAuthMiddleware, async (c) => {
 
     delete user.password;
 
-    return c.json(await formatUserResponse(user, baseUrl, isAdmin));
+    return c.json(await formatUserResponse(user, baseUrl, isAdmin, settings.gravatar_base_url));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -405,7 +405,7 @@ users.post('/', authMiddleware, requireRole('administrator'), async (c) => {
 
     delete createdUser!.password;
 
-    return c.json(await formatUserResponse(createdUser!, baseUrl, true), 201);
+    return c.json(await formatUserResponse(createdUser!, baseUrl, true, settings.gravatar_base_url), 201);
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -503,7 +503,7 @@ users.put('/:id', authMiddleware, async (c) => {
     // If no fields to update, return current user
     if (updates.length === 0) {
       delete existingUser.password;
-      return c.json(await formatUserResponse(existingUser, baseUrl, true));
+      return c.json(await formatUserResponse(existingUser, baseUrl, true, settings.gravatar_base_url));
     }
 
     const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
@@ -518,7 +518,7 @@ users.put('/:id', authMiddleware, async (c) => {
 
     delete updatedUser!.password;
 
-    return c.json(await formatUserResponse(updatedUser!, baseUrl, true));
+    return c.json(await formatUserResponse(updatedUser!, baseUrl, true, settings.gravatar_base_url));
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
@@ -570,7 +570,10 @@ users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => 
 
       delete user.password;
 
-      return c.json({ deleted: true, previous: await formatUserResponse(user, baseUrl, true) });
+      return c.json({
+        deleted: true,
+        previous: await formatUserResponse(user, baseUrl, true, settings.gravatar_base_url)
+      });
     } else {
       // Deactivate user
       await c.env.DB.prepare('UPDATE users SET status = ? WHERE id = ?').bind('inactive', id).run();
@@ -581,7 +584,9 @@ users.delete('/:id', authMiddleware, requireRole('administrator'), async (c) => 
 
       delete deactivatedUser!.password;
 
-      return c.json(await formatUserResponse(deactivatedUser!, baseUrl, true));
+      return c.json(
+        await formatUserResponse(deactivatedUser!, baseUrl, true, settings.gravatar_base_url)
+      );
     }
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);

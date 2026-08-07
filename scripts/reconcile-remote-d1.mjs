@@ -198,6 +198,17 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0006_add_gravatar_base_url.sql',
+    description: 'Gravatar mirror base URL in site_settings',
+    isSatisfied() {
+      return siteSettingsExist(['gravatar_base_url']);
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
 ];
 
 function main() {

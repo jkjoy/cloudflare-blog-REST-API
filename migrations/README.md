@@ -5,6 +5,7 @@
 ## 迁移文件列表
 
 - `0001_add_sticky_to_posts.sql` - ✅ 已应用 - 为 posts 表添加 sticky 字段，用于支持文章置顶功能
+- `0006_add_gravatar_base_url.sql` - 为站点设置增加可配置的 Gravatar 镜像地址
 
 ## 如何应用迁移
 

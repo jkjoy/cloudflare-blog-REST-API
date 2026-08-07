@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv, Env, JWTPayload } from '../types';
 import {
   buildPaginationHeaders,
+  buildGravatarUrl,
   canViewNonPublicContent,
   createWPError,
   getSiteSettings,
@@ -28,16 +29,22 @@ function normalizeEmail(value: unknown): string {
   return String(value || '').trim().toLowerCase();
 }
 
-async function getAdminAvatarUrl(adminEmail: unknown): Promise<string> {
+async function getAdminAvatarUrl(adminEmail: unknown, gravatarBaseUrl?: unknown): Promise<string> {
   const normalizedEmail = normalizeEmail(adminEmail);
   if (!normalizedEmail) {
     return '';
   }
 
-  return `https://cn.cravatar.com/avatar/${await md5(normalizedEmail)}?s=96&d=mp&r=g`;
+  return buildGravatarUrl(await md5(normalizedEmail), 96, gravatarBaseUrl, 'mp');
 }
 
-function formatMomentResponse(moment: any, author: any, baseUrl: string, adminAvatarUrl = '') {
+function formatMomentResponse(
+  moment: any,
+  author: any,
+  baseUrl: string,
+  adminAvatarUrl = '',
+  gravatarBaseUrl?: unknown
+) {
   const mediaUrls = moment.media_urls ? JSON.parse(moment.media_urls) : [];
 
   return {
@@ -49,7 +56,9 @@ function formatMomentResponse(moment: any, author: any, baseUrl: string, adminAv
     author: author.id,
     author_name: author.display_name || author.username,
     author_avatar:
-      author.avatar_url || adminAvatarUrl || `https://cn.cravatar.com/avatar/${moment.author_id}?d=mp`,
+      author.avatar_url ||
+      adminAvatarUrl ||
+      buildGravatarUrl(String(moment.author_id), 96, gravatarBaseUrl, 'mp'),
     status: moment.status,
     media_urls: mediaUrls,
     view_count: moment.view_count || 0,
@@ -147,7 +156,10 @@ moments.get('/', optionalAuthMiddleware, async (c) => {
   try {
     const settings = await getSiteSettings(c.env);
     const baseUrl = getBaseUrl(settings?.site_url);
-    const adminAvatarUrl = await getAdminAvatarUrl(settings?.admin_email);
+    const adminAvatarUrl = await getAdminAvatarUrl(
+      settings?.admin_email,
+      settings?.gravatar_base_url
+    );
 
     const user = (c as any).get('user') as JWTPayload | undefined;
     const page = parsePageParam(c.req.query('page'));
@@ -208,7 +220,13 @@ moments.get('/', optionalAuthMiddleware, async (c) => {
         const authorRecord = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
           .bind(moment.author_id)
           .first();
-        return formatMomentResponse(moment, authorRecord, baseUrl, adminAvatarUrl);
+        return formatMomentResponse(
+          moment,
+          authorRecord,
+          baseUrl,
+          adminAvatarUrl,
+          settings?.gravatar_base_url
+        );
       }),
     );
 
@@ -726,7 +744,10 @@ moments.get('/:id', optionalAuthMiddleware, async (c) => {
   try {
     const settings = await getSiteSettings(c.env);
     const baseUrl = getBaseUrl(settings?.site_url);
-    const adminAvatarUrl = await getAdminAvatarUrl(settings?.admin_email);
+    const adminAvatarUrl = await getAdminAvatarUrl(
+      settings?.admin_email,
+      settings?.gravatar_base_url
+    );
     const id = parseInt(c.req.param('id') || '');
 
     const moment = await getMomentOr404(c.env, id);
@@ -742,7 +763,9 @@ moments.get('/:id', optionalAuthMiddleware, async (c) => {
       .bind(id)
       .run();
 
-    return c.json(formatMomentResponse(moment, author, baseUrl, adminAvatarUrl));
+    return c.json(
+      formatMomentResponse(moment, author, baseUrl, adminAvatarUrl, settings?.gravatar_base_url)
+    );
   } catch (error) {
     console.error('Error fetching moment:', error);
     return createWPError('fetch_error', 'Failed to fetch moment', 500);
@@ -782,9 +805,15 @@ moments.post('/', authMiddleware, requireRole('administrator', 'editor', 'author
 
     const settings = await getSiteSettings(c.env);
     const baseUrl = getBaseUrl(settings?.site_url);
-    const adminAvatarUrl = await getAdminAvatarUrl(settings?.admin_email);
+    const adminAvatarUrl = await getAdminAvatarUrl(
+      settings?.admin_email,
+      settings?.gravatar_base_url
+    );
 
-    return c.json(formatMomentResponse(moment, author, baseUrl, adminAvatarUrl), 201);
+    return c.json(
+      formatMomentResponse(moment, author, baseUrl, adminAvatarUrl, settings?.gravatar_base_url),
+      201
+    );
   } catch (error) {
     console.error('Error creating moment:', error);
     return createWPError('create_error', 'Failed to create moment', 500);
@@ -854,9 +883,14 @@ moments.put('/:id', authMiddleware, async (c) => {
 
     const settings = await getSiteSettings(c.env);
     const baseUrl = getBaseUrl(settings?.site_url);
-    const adminAvatarUrl = await getAdminAvatarUrl(settings?.admin_email);
+    const adminAvatarUrl = await getAdminAvatarUrl(
+      settings?.admin_email,
+      settings?.gravatar_base_url
+    );
 
-    return c.json(formatMomentResponse(moment, author, baseUrl, adminAvatarUrl));
+    return c.json(
+      formatMomentResponse(moment, author, baseUrl, adminAvatarUrl, settings?.gravatar_base_url)
+    );
   } catch (error) {
     console.error('Error updating moment:', error);
     return createWPError('update_error', 'Failed to update moment', 500);
@@ -903,9 +937,14 @@ moments.delete('/:id', authMiddleware, async (c) => {
 
     const settings = await getSiteSettings(c.env);
     const baseUrl = getBaseUrl(settings?.site_url);
-    const adminAvatarUrl = await getAdminAvatarUrl(settings?.admin_email);
+    const adminAvatarUrl = await getAdminAvatarUrl(
+      settings?.admin_email,
+      settings?.gravatar_base_url
+    );
 
-    return c.json(formatMomentResponse(moment, author, baseUrl, adminAvatarUrl));
+    return c.json(
+      formatMomentResponse(moment, author, baseUrl, adminAvatarUrl, settings?.gravatar_base_url)
+    );
   } catch (error) {
     console.error('Error deleting moment:', error);
     return createWPError('delete_error', 'Failed to delete moment', 500);
