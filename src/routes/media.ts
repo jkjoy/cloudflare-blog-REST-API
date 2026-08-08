@@ -5,7 +5,6 @@ import {
   buildPaginationHeaders,
   createWPError,
   getSiteSettings,
-  normalizeBaseUrl,
   parsePageParam,
   parsePerPageParam
 } from '../utils';
@@ -187,9 +186,8 @@ media.post('/', authMiddleware, requireRole('administrator', 'editor', 'author')
       }
     });
 
-    // Generate public URL
-    // In production, you should configure a custom domain for your R2 bucket
-    const url = `${normalizeBaseUrl(baseUrl)}/media/${r2Key}`;
+    // Keep media references portable when the site domain changes.
+    const url = `/media/${r2Key}`;
 
     // Determine file type and dimensions
     let fileType = 'file';

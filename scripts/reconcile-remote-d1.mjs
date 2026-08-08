@@ -209,6 +209,24 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0007_normalize_media_urls.sql',
+    description: 'domain-independent paths in media.url',
+    isSatisfied() {
+      if (!tableExists('media')) {
+        return false;
+      }
+
+      const rows = queryRows(
+        "SELECT COUNT(*) AS invalid_count FROM media WHERE url != '/media/' || ltrim(r2_key, '/');",
+      );
+      return Number(rows[0]?.invalid_count || 0) === 0;
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
 ];
 
 function main() {

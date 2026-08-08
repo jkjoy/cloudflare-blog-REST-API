@@ -484,6 +484,7 @@ export function formatTagResponse(tag: Tag, baseUrl: string): TagResponse {
 // Convert database Media to WordPress REST API response format
 export function formatMediaResponse(media: Media, baseUrl: string): MediaResponse {
   baseUrl = normalizeBaseUrl(baseUrl);
+  const mediaUrl = `/media/${media.r2_key.replace(/^\/+/, '')}`;
   return {
     id: media.id,
     date: media.created_at,
@@ -493,7 +494,7 @@ export function formatMediaResponse(media: Media, baseUrl: string): MediaRespons
     slug: media.filename,
     status: 'inherit',
     type: 'attachment',
-    link: media.url,
+    link: mediaUrl,
     title: {
       rendered: media.title
     },
@@ -517,7 +518,7 @@ export function formatMediaResponse(media: Media, baseUrl: string): MediaRespons
       file: media.filename,
       filesize: media.file_size
     },
-    source_url: media.url,
+    source_url: mediaUrl,
     _links: {
       self: [{ href: `${baseUrl}/wp-json/wp/v2/media/${media.id}` }],
       collection: [{ href: `${baseUrl}/wp-json/wp/v2/media` }],
