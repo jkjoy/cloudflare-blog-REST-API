@@ -9,7 +9,7 @@ export interface AdminUser {
 }
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
   user: AdminUser;
 }
 

@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { SignJWT, jwtVerify } from 'jose';
 import type { AppContext, AppEnv, JWTPayload, User } from './types';
 import { createWPError } from './utils';
@@ -8,6 +9,15 @@ const DEFAULT_JWT_SECRETS = new Set([
   'your-jwt-secret-here-change-in-production',
   'your-jwt-secret-here'
 ]);
+const JWT_ISSUER = 'cfblog';
+const JWT_AUDIENCE = 'cfblog-admin';
+const AUTH_COOKIE_NAME = 'auth_token';
+const USER_ROLES = new Set(['administrator', 'editor', 'author', 'contributor', 'subscriber']);
+
+type AuthCredential = {
+  source: 'bearer' | 'cookie';
+  token: string;
+};
 
 export function isUnsafeJwtSecret(secret: string): boolean {
   const normalized = String(secret || '').trim();
@@ -24,7 +34,8 @@ export async function generateToken(user: User, secret: string): Promise<string>
     userId: user.id,
     username: user.username,
     email: user.email,
-    role: user.role
+    role: user.role,
+    tokenVersion: user.token_version
   };
 
   const encoder = new TextEncoder();
@@ -32,6 +43,9 @@ export async function generateToken(user: User, secret: string): Promise<string>
 
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
+    .setSubject(String(user.id))
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(secretKey);
@@ -49,7 +63,22 @@ export async function verifyToken(token: string, secret: string): Promise<JWTPay
     const encoder = new TextEncoder();
     const secretKey = encoder.encode(secret);
 
-    const { payload } = await jwtVerify(token, secretKey);
+    const { payload } = await jwtVerify(token, secretKey, {
+      algorithms: ['HS256'],
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE
+    });
+
+    if (
+      !Number.isInteger(payload.userId) ||
+      typeof payload.username !== 'string' ||
+      typeof payload.email !== 'string' ||
+      !USER_ROLES.has(String(payload.role)) ||
+      !Number.isInteger(payload.tokenVersion)
+    ) {
+      return null;
+    }
+
     return payload as JWTPayload;
   } catch (error) {
     return null;
@@ -66,35 +95,93 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-// Extract token from request
-export function extractToken(c: Context): string | null {
-  const authHeader = c.req.header('Authorization');
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7);
+export function validatePassword(password: unknown): string | null {
+  if (typeof password !== 'string' || Array.from(password).length < 12) {
+    return 'Password must be at least 12 characters long.';
   }
 
-  // Also check for cookie-based auth
-  const cookie = c.req.header('Cookie');
-  if (cookie) {
-    const match = cookie.match(/auth_token=([^;]+)/);
-    if (match) {
-      return match[1];
-    }
+  if (new TextEncoder().encode(password).length > 72) {
+    return 'Password must not exceed 72 UTF-8 bytes.';
   }
 
   return null;
 }
 
+// Extract token from request
+function extractAuthCredential(c: Context): AuthCredential | null {
+  const authHeader = c.req.header('Authorization');
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    return token ? { source: 'bearer', token } : null;
+  }
+
+  const token = getCookie(c, AUTH_COOKIE_NAME);
+  if (token) {
+    return { source: 'cookie', token };
+  }
+
+  return null;
+}
+
+export function extractToken(c: Context): string | null {
+  return extractAuthCredential(c)?.token || null;
+}
+
+function isCookieRequestOriginAllowed(c: Context): boolean {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method.toUpperCase())) {
+    return true;
+  }
+
+  const requestOrigin = new URL(c.req.url).origin;
+  const origin = c.req.header('Origin');
+  if (origin) {
+    return origin === requestOrigin;
+  }
+
+  const fetchSite = c.req.header('Sec-Fetch-Site');
+  return !fetchSite || fetchSite === 'same-origin' || fetchSite === 'none';
+}
+
+async function getCurrentUser(c: AppContext, token: string): Promise<JWTPayload | null> {
+  const payload = await verifyToken(token, c.env.JWT_SECRET);
+  if (!payload) {
+    return null;
+  }
+
+  const user = await c.env.DB.prepare(
+    'SELECT id, username, email, role, status, token_version FROM users WHERE id = ? AND status = ?'
+  )
+    .bind(payload.userId, 'active')
+    .first<Pick<User, 'id' | 'username' | 'email' | 'role' | 'status' | 'token_version'>>();
+
+  if (!user || user.token_version !== payload.tokenVersion) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    userId: user.id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    tokenVersion: user.token_version
+  };
+}
+
 // Auth middleware - requires authentication
 export async function authMiddleware(c: AppContext, next: Next) {
-  const token = extractToken(c);
+  const credential = extractAuthCredential(c);
 
-  if (!token) {
+  if (!credential) {
     return createWPError('rest_not_logged_in', 'You are not currently logged in.', 401);
   }
 
-  const payload = await verifyToken(token, c.env.JWT_SECRET);
+  if (credential.source === 'cookie' && !isCookieRequestOriginAllowed(c)) {
+    return createWPError('rest_invalid_origin', 'Cross-origin cookie authentication is not allowed.', 403);
+  }
+
+  const payload = await getCurrentUser(c, credential.token);
 
   if (!payload) {
     return createWPError('rest_invalid_token', 'Invalid or expired token.', 401);
@@ -108,10 +195,14 @@ export async function authMiddleware(c: AppContext, next: Next) {
 
 // Optional auth middleware - doesn't require authentication but populates user if authenticated
 export async function optionalAuthMiddleware(c: AppContext, next: Next) {
-  const token = extractToken(c);
+  const credential = extractAuthCredential(c);
 
-  if (token) {
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
+  if (credential) {
+    if (credential.source === 'cookie' && !isCookieRequestOriginAllowed(c)) {
+      return createWPError('rest_invalid_origin', 'Cross-origin cookie authentication is not allowed.', 403);
+    }
+
+    const payload = await getCurrentUser(c, credential.token);
     if (payload) {
       c.set('user', payload);
     }

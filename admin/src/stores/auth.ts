@@ -3,33 +3,28 @@ import { computed, ref } from 'vue';
 import { apiJson } from '../api/client';
 import type { AdminUser, AuthResponse } from '../types';
 
-const TOKEN_KEY = 'auth_token';
-
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem(TOKEN_KEY) || '');
+  localStorage.removeItem('auth_token');
+  const token = ref('');
   const user = ref<AdminUser | null>(null);
   const checking = ref(false);
   const hasUsers = ref(true);
-  const authenticated = computed(() => !!token.value && !!user.value);
+  const authenticated = computed(() => !!user.value);
 
   function persistSession(response: AuthResponse) {
-    token.value = response.token;
     user.value = response.user;
-    localStorage.setItem(TOKEN_KEY, response.token);
   }
 
   function clearSession() {
     token.value = '';
     user.value = null;
-    localStorage.removeItem(TOKEN_KEY);
   }
 
   async function checkSession() {
-    if (!token.value) return false;
     if (user.value) return true;
     checking.value = true;
     try {
-      user.value = await apiJson<AdminUser>('/users/me', {}, token.value);
+      user.value = await apiJson<AdminUser>('/users/me');
       return true;
     } catch {
       clearSession();
@@ -41,8 +36,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function checkHasUsers() {
     try {
-      const users = await apiJson<AdminUser[]>('/users?per_page=1');
-      hasUsers.value = users.length > 0;
+      const status = await apiJson<{ has_users: boolean }>('/users/registration-status');
+      hasUsers.value = status.has_users;
     } catch {
       hasUsers.value = true;
     }
@@ -51,7 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(username: string, password: string) {
     const response = await apiJson<AuthResponse>('/users/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, use_cookie: true }),
     });
     persistSession(response);
   }
@@ -64,9 +59,19 @@ export const useAuthStore = defineStore('auth', () => {
   }) {
     const response = await apiJson<AuthResponse>('/users/register', {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, use_cookie: true }),
     });
     persistSession(response);
+  }
+
+  async function logout() {
+    try {
+      await apiJson<{ success: boolean }>('/users/logout', { method: 'POST' });
+    } catch {
+      // Local state still needs to be cleared when the network is unavailable.
+    } finally {
+      clearSession();
+    }
   }
 
   return {
@@ -77,6 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession,
     hasUsers,
     login,
+    logout,
     register,
     token,
     user,

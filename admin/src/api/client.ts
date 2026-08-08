@@ -24,7 +24,11 @@ export async function apiFetch(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: 'same-origin',
+    headers,
+  });
   if (!response.ok) {
     let message = `请求失败 (${response.status})`;
     let code = '';

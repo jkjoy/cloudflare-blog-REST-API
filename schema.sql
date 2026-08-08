@@ -13,7 +13,15 @@ CREATE TABLE IF NOT EXISTS users (
     registered_at TEXT DEFAULT CURRENT_TIMESTAMP,
     last_login TEXT,
     avatar_url TEXT,
-    bio TEXT
+    bio TEXT,
+    token_version INTEGER NOT NULL DEFAULT 0
+);
+
+-- Login rate limiting
+CREATE TABLE IF NOT EXISTS auth_login_attempts (
+    attempt_key TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    window_started_at INTEGER NOT NULL
 );
 
 -- Posts table
@@ -248,6 +256,7 @@ CREATE INDEX IF NOT EXISTS idx_moment_comments_parent ON moment_comments(parent_
 CREATE INDEX IF NOT EXISTS idx_moment_comments_status ON moment_comments(status);
 CREATE INDEX IF NOT EXISTS idx_moment_comments_author_ip_created ON moment_comments(author_ip, created_at);
 CREATE INDEX IF NOT EXISTS idx_moment_comments_author_email_created ON moment_comments(author_email, created_at);
+CREATE INDEX IF NOT EXISTS idx_auth_login_attempts_window ON auth_login_attempts(window_started_at);
 
 -- Insert default options
 INSERT OR IGNORE INTO options (option_name, option_value, autoload) VALUES

@@ -58,14 +58,14 @@ function openItem(item: (typeof navItems.value)[number]) {
   router.push(item.path);
 }
 
-function handleUserAction(key: string) {
+async function handleUserAction(key: string) {
   if (key === 'language') {
     toggleLocale();
     return;
   }
   if (key === 'logout') {
     drawerOpen.value = false;
-    auth.clearSession();
+    await auth.logout();
     router.replace('/login');
   }
 }

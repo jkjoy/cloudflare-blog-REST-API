@@ -15,9 +15,10 @@ import {
   parseSqlOrder,
   sendWebhook
 } from '../utils';
-import { authMiddleware, optionalAuthMiddleware, canEditPost, canDeletePost, canPublishPost } from '../auth';
+import { authMiddleware, optionalAuthMiddleware, requireRole, canEditPost, canDeletePost, canPublishPost } from '../auth';
 
 const posts = new Hono<AppEnv>();
+const POST_STATUSES = new Set(['publish', 'draft', 'pending', 'private', 'trash']);
 
 // GET /wp/v2/posts - List posts
 posts.get('/', optionalAuthMiddleware, async (c) => {
@@ -331,7 +332,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
 });
 
 // POST /wp/v2/posts - Create post
-posts.post('/', authMiddleware, async (c) => {
+posts.post('/', authMiddleware, requireRole('administrator', 'editor', 'author', 'contributor'), async (c) => {
   try {
     const settings = await getSiteSettings(c.env);
     const baseUrl = settings.site_url || 'http://localhost:8787';
@@ -347,10 +348,14 @@ posts.post('/', authMiddleware, async (c) => {
 
     // Check if user can publish
     const postStatus = status || 'draft';
-    if (postStatus === 'publish' && !canPublishPost(user)) {
+    if (!POST_STATUSES.has(postStatus)) {
+      return createWPError('rest_invalid_param', 'Invalid post status.', 400);
+    }
+
+    if (!canPublishPost(user) && !['draft', 'pending'].includes(postStatus)) {
       return createWPError(
         'rest_cannot_publish',
-        'Sorry, you are not allowed to publish posts.',
+        'Sorry, you are not allowed to use this post status.',
         403
       );
     }
@@ -496,11 +501,15 @@ posts.put('/:id', authMiddleware, async (c) => {
     const body = await c.req.json();
     const { title, content, excerpt, slug, status, categories, tags, featured_media, featured_image_url, date, sticky } = body;
 
-    // Check publish permission
-    if (status === 'publish' && existingPost.status !== 'publish' && !canPublishPost(user)) {
+    if (status !== undefined && !POST_STATUSES.has(status)) {
+      return createWPError('rest_invalid_param', 'Invalid post status.', 400);
+    }
+
+    // Contributors can submit drafts for review but cannot make content public or private.
+    if (status !== undefined && !canPublishPost(user) && !['draft', 'pending'].includes(status)) {
       return createWPError(
         'rest_cannot_publish',
-        'Sorry, you are not allowed to publish posts.',
+        'Sorry, you are not allowed to use this post status.',
         403
       );
     }

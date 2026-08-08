@@ -18,11 +18,35 @@ import { registerPublicSiteRoutes, renderPublicHome } from './public-site';
 
 const app = new Hono<AppEnv>();
 
+app.use('*', async (c, next) => {
+  await next();
+
+  c.header('Cross-Origin-Opener-Policy', 'same-origin');
+  c.header('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'SAMEORIGIN');
+
+  if (new URL(c.req.url).protocol === 'https:') {
+    c.header('Strict-Transport-Security', 'max-age=31536000');
+  }
+
+  if (c.req.path === '/wp-admin') {
+    c.header(
+      'Content-Security-Policy',
+      "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; " +
+      "form-action 'self'; frame-ancestors 'none'; frame-src 'self'; img-src 'self' data: https:; " +
+      "object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    );
+  }
+});
+
 // CORS middleware
 app.use('*', cors({
-  origin: '*',
+  origin: (origin, c) => origin === new URL(c.req.url).origin ? origin : undefined,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
   exposeHeaders: ['X-WP-Total', 'X-WP-TotalPages', 'Link'],
   maxAge: 600,
 }));

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, JWTPayload, User } from '../types';
 import {
   formatUserResponse,
@@ -9,9 +10,36 @@ import {
   parsePerPageParam,
   parseSqlOrder
 } from '../utils';
-import { authMiddleware, optionalAuthMiddleware, requireRole, generateToken, hashPassword, comparePassword, isUnsafeJwtSecret } from '../auth';
+import { authMiddleware, optionalAuthMiddleware, requireRole, generateToken, hashPassword, comparePassword, isUnsafeJwtSecret, validatePassword } from '../auth';
 
 const users = new Hono<AppEnv>();
+const AUTH_COOKIE_NAME = 'auth_token';
+const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const DUMMY_PASSWORD_HASH = '$2a$10$Entv3A1i49.2oDBTCDHgKOfDKiuTSxymSzdea7bUkK8KQWB6G76wK';
+
+type LoginLimit = {
+  key: string;
+  limit: number;
+  windowSeconds: number;
+};
+
+function setAuthCookie(c: any, token: string): void {
+  setCookie(c, AUTH_COOKIE_NAME, token, {
+    httpOnly: true,
+    maxAge: AUTH_COOKIE_MAX_AGE,
+    path: '/',
+    priority: 'High',
+    sameSite: 'Strict',
+    secure: new URL(c.req.url).protocol === 'https:'
+  });
+}
+
+function clearAuthCookie(c: any): void {
+  deleteCookie(c, AUTH_COOKIE_NAME, {
+    path: '/',
+    secure: new URL(c.req.url).protocol === 'https:'
+  });
+}
 
 function getClientIp(c: any): string {
   return String(
@@ -24,34 +52,73 @@ function getClientIp(c: any): string {
     .trim();
 }
 
-async function isLoginRateLimited(c: any, username: string): Promise<boolean> {
-  const cache = caches.default;
-  const ip = getClientIp(c) || 'unknown';
-  const normalizedUsername = String(username || '').trim().toLowerCase() || 'unknown';
-  const key = new Request(`https://cfblog.local/rate-login/${encodeURIComponent(ip)}/${encodeURIComponent(normalizedUsername)}`);
-  const existing = await cache.match(key);
-  const attempts = existing ? parseInt(await existing.text(), 10) || 0 : 0;
-
-  if (attempts >= 10) {
-    return true;
-  }
-
-  await cache.put(
-    key,
-    new Response(String(attempts + 1), {
-      headers: {
-        'Cache-Control': 'max-age=300'
-      }
-    })
-  );
-  return false;
+async function hashRateLimitValue(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function clearLoginRateLimit(c: any, username: string): Promise<void> {
+async function getLoginLimits(c: any, user: User | null, username: string): Promise<LoginLimit[]> {
   const ip = getClientIp(c) || 'unknown';
-  const normalizedUsername = String(username || '').trim().toLowerCase() || 'unknown';
-  await caches.default.delete(
-    new Request(`https://cfblog.local/rate-login/${encodeURIComponent(ip)}/${encodeURIComponent(normalizedUsername)}`)
+  const account = user ? `user:${user.id}` : `login:${username.trim().toLowerCase()}`;
+  const [ipHash, accountHash] = await Promise.all([
+    hashRateLimitValue(ip),
+    hashRateLimitValue(account)
+  ]);
+
+  return [
+    { key: `pair:${ipHash}:${accountHash}`, limit: 10, windowSeconds: 300 },
+    { key: `ip:${ipHash}`, limit: 60, windowSeconds: 300 },
+    { key: `account:${accountHash}`, limit: 30, windowSeconds: 900 }
+  ];
+}
+
+async function isLoginRateLimited(c: any, limits: LoginLimit[]): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000);
+  const results = await c.env.DB.batch(
+    limits.map((item) => c.env.DB.prepare(
+      'SELECT attempts, window_started_at FROM auth_login_attempts WHERE attempt_key = ?'
+    ).bind(item.key))
+  );
+
+  return results.some((result: D1Result, index: number) => {
+    const row = result.results?.[0] as { attempts?: number; window_started_at?: number } | undefined;
+    return !!row &&
+      Number(row.window_started_at) > now - limits[index].windowSeconds &&
+      Number(row.attempts) >= limits[index].limit;
+  });
+}
+
+async function recordFailedLogin(c: any, limits: LoginLimit[]): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const updates = limits.map((item) => {
+    const resetBefore = now - item.windowSeconds;
+    return c.env.DB.prepare(`
+      INSERT INTO auth_login_attempts (attempt_key, attempts, window_started_at)
+      VALUES (?, 1, ?)
+      ON CONFLICT(attempt_key) DO UPDATE SET
+        attempts = CASE
+          WHEN auth_login_attempts.window_started_at <= ? THEN 1
+          ELSE auth_login_attempts.attempts + 1
+        END,
+        window_started_at = CASE
+          WHEN auth_login_attempts.window_started_at <= ? THEN ?
+          ELSE auth_login_attempts.window_started_at
+        END
+    `).bind(item.key, now, resetBefore, resetBefore, now);
+  });
+
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM auth_login_attempts WHERE window_started_at <= ?')
+      .bind(now - 86400),
+    ...updates
+  ]);
+}
+
+async function clearLoginRateLimit(c: any, limits: LoginLimit[]): Promise<void> {
+  await c.env.DB.batch(
+    limits.map((item) => c.env.DB.prepare(
+      'DELETE FROM auth_login_attempts WHERE attempt_key = ?'
+    ).bind(item.key))
   );
 }
 
@@ -62,9 +129,9 @@ users.post('/login', async (c) => {
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
     const body = await c.req.json();
-    const { username, password } = body;
+    const { username, password, use_cookie: useCookie } = body;
 
-    if (!username || !password) {
+    if (typeof username !== 'string' || !username.trim() || typeof password !== 'string' || !password) {
       return createWPError('rest_invalid_param', 'Username and password are required.', 400);
     }
 
@@ -72,29 +139,28 @@ users.post('/login', async (c) => {
       return createWPError('server_not_configured', 'JWT_SECRET is not configured securely.', 500);
     }
 
-    if (await isLoginRateLimited(c, username)) {
-      return createWPError('too_many_login_attempts', 'Too many login attempts. Please try again later.', 429);
-    }
-
-    // Find user
     const user = await c.env.DB.prepare(
       'SELECT * FROM users WHERE (username = ? OR email = ?) AND status = ?'
     )
       .bind(username, username, 'active')
       .first<User>();
 
-    if (!user) {
-      return createWPError('invalid_username', 'Invalid username or password.', 401);
+    const loginLimits = await getLoginLimits(c, user, username);
+    if (await isLoginRateLimited(c, loginLimits)) {
+      return createWPError('too_many_login_attempts', 'Too many login attempts. Please try again later.', 429);
     }
 
-    // Verify password
-    const isValidPassword = await comparePassword(password, user.password!);
+    const passwordFitsBcrypt = new TextEncoder().encode(password).length <= 72;
+    const passwordToCompare = passwordFitsBcrypt ? password : 'invalid-password-over-limit';
+    const hashToCompare = passwordFitsBcrypt && user?.password ? user.password : DUMMY_PASSWORD_HASH;
+    const isValidPassword = passwordFitsBcrypt && await comparePassword(passwordToCompare, hashToCompare);
 
-    if (!isValidPassword) {
-      return createWPError('invalid_password', 'Invalid username or password.', 401);
+    if (!user || !isValidPassword) {
+      await recordFailedLogin(c, loginLimits);
+      return createWPError('invalid_credentials', 'Invalid username or password.', 401);
     }
 
-    await clearLoginRateLimit(c, username);
+    await clearLoginRateLimit(c, loginLimits);
 
     // Update last login
     await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
@@ -103,12 +169,15 @@ users.post('/login', async (c) => {
 
     // Generate token
     const token = await generateToken(user, c.env.JWT_SECRET);
+    if (useCookie === true) {
+      setAuthCookie(c, token);
+    }
 
     // Remove password from response
     delete user.password;
 
     return c.json({
-      token,
+      ...(useCookie === true ? {} : { token }),
       user: await formatUserResponse(user, baseUrl, true, settings.gravatar_base_url),
       user_email: user.email,
       user_nicename: user.username,
@@ -126,7 +195,7 @@ users.post('/register', async (c) => {
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
     const body = await c.req.json();
-    const { username, email, password, display_name } = body;
+    const { username, email, password, display_name, use_cookie: useCookie } = body;
 
     if (!username || !email || !password) {
       return createWPError(
@@ -134,6 +203,11 @@ users.post('/register', async (c) => {
         'Username, email, and password are required.',
         400
       );
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return createWPError('rest_invalid_password', passwordError, 400);
     }
 
     if (isUnsafeJwtSecret(c.env.JWT_SECRET)) {
@@ -187,13 +261,16 @@ users.post('/register', async (c) => {
 
     // Generate token
     const token = await generateToken(createdUser!, c.env.JWT_SECRET);
+    if (useCookie === true) {
+      setAuthCookie(c, token);
+    }
 
     // Remove password from response
     delete createdUser!.password;
 
     return c.json(
       {
-        token,
+        ...(useCookie === true ? {} : { token }),
         user: await formatUserResponse(createdUser!, baseUrl, true, settings.gravatar_base_url)
       },
       201
@@ -201,6 +278,19 @@ users.post('/register', async (c) => {
   } catch (error: any) {
     return createWPError('server_error', error.message, 500);
   }
+});
+
+// POST /wp/v2/users/logout - Clear the browser session cookie
+users.post('/logout', (c) => {
+  clearAuthCookie(c);
+  return c.json({ success: true });
+});
+
+// GET /wp/v2/users/registration-status - Expose only bootstrap availability
+users.get('/registration-status', async (c) => {
+  const result = await c.env.DB.prepare('SELECT EXISTS(SELECT 1 FROM users) AS has_users')
+    .first<{ has_users: number }>();
+  return c.json({ has_users: Number(result?.has_users || 0) === 1 });
 });
 
 // GET /wp/v2/users/me - Get current user
@@ -255,11 +345,15 @@ users.get('/', optionalAuthMiddleware, async (c) => {
     const params: any[] = ['active'];
 
     if (search) {
-      query += ' AND (username LIKE ? OR email LIKE ? OR display_name LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      query += isAdmin
+        ? ' AND (username LIKE ? OR email LIKE ? OR display_name LIKE ?)'
+        : ' AND (username LIKE ? OR display_name LIKE ?)';
+      params.push(...(isAdmin
+        ? [`%${search}%`, `%${search}%`, `%${search}%`]
+        : [`%${search}%`, `%${search}%`]));
     }
 
-    if (role) {
+    if (role && isAdmin) {
       query += ' AND role = ?';
       params.push(role);
     }
@@ -271,7 +365,9 @@ users.get('/', optionalAuthMiddleware, async (c) => {
       id: 'id',
       email: 'email'
     };
-    const orderColumn = orderMap[orderby] || 'registered_at';
+    const orderColumn = orderby === 'email' && !isAdmin
+      ? 'registered_at'
+      : orderMap[orderby] || 'registered_at';
     query += ` ORDER BY ${orderColumn} ${order} LIMIT ? OFFSET ?`;
     params.push(perPage, offset);
 
@@ -281,10 +377,14 @@ users.get('/', optionalAuthMiddleware, async (c) => {
     let countQuery = 'SELECT COUNT(*) as count FROM users WHERE status = ?';
     const countParams: any[] = ['active'];
     if (search) {
-      countQuery += ' AND (username LIKE ? OR email LIKE ? OR display_name LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      countQuery += isAdmin
+        ? ' AND (username LIKE ? OR email LIKE ? OR display_name LIKE ?)'
+        : ' AND (username LIKE ? OR display_name LIKE ?)';
+      countParams.push(...(isAdmin
+        ? [`%${search}%`, `%${search}%`, `%${search}%`]
+        : [`%${search}%`, `%${search}%`]));
     }
-    if (role) {
+    if (role && isAdmin) {
       countQuery += ' AND role = ?';
       countParams.push(role);
     }
@@ -359,6 +459,11 @@ users.post('/', authMiddleware, requireRole('administrator'), async (c) => {
         'Username, email, and password are required.',
         400
       );
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return createWPError('rest_invalid_password', passwordError, 400);
     }
 
     // Check if username or email already exists
@@ -489,15 +594,28 @@ users.put('/:id', authMiddleware, async (c) => {
       params.push(avatar_url);
     }
 
-    if (password) {
+    let invalidateSessions = false;
+
+    if (password !== undefined) {
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return createWPError('rest_invalid_password', passwordError, 400);
+      }
+
       const hashedPassword = await hashPassword(password);
       updates.push('password = ?');
       params.push(hashedPassword);
+      invalidateSessions = true;
     }
 
     if (role && currentUser.role === 'administrator') {
       updates.push('role = ?');
       params.push(role);
+      invalidateSessions = true;
+    }
+
+    if (invalidateSessions) {
+      updates.push('token_version = token_version + 1');
     }
 
     // If no fields to update, return current user
@@ -510,6 +628,10 @@ users.put('/:id', authMiddleware, async (c) => {
     params.push(id);
 
     await c.env.DB.prepare(updateQuery).bind(...params).run();
+
+    if (invalidateSessions && currentUser.userId === id) {
+      clearAuthCookie(c);
+    }
 
     // Get updated user
     const updatedUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')

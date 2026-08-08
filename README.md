@@ -440,12 +440,16 @@ API 统一挂载在 `/wp-json/wp/v2` 下，公开发现入口为 `/wp-json/`。
 
 - `POST /wp-json/wp/v2/users/login` - 用户登录
 - `POST /wp-json/wp/v2/users/register` - 用户注册
+- `POST /wp-json/wp/v2/users/logout` - 清除后台会话 Cookie
+- `GET /wp-json/wp/v2/users/registration-status` - 获取是否已有用户
 - `GET /wp-json/wp/v2/users/me` - 获取当前登录用户
 - `GET /wp-json/wp/v2/users` - 获取用户列表
 - `GET /wp-json/wp/v2/users/:id` - 获取用户详情
 - `POST /wp-json/wp/v2/users` - 管理员创建用户
 - `PUT /wp-json/wp/v2/users/:id` - 更新用户
 - `DELETE /wp-json/wp/v2/users/:id` - 删除用户
+
+管理后台使用 `HttpOnly` Cookie 会话；REST 客户端仍可从登录响应获取 Bearer Token。新建或修改密码时，长度至少为 12 个字符且不得超过 72 个 UTF-8 字节。
 
 ### 文章与页面
 

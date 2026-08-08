@@ -238,6 +238,31 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0009_add_user_token_version.sql',
+    description: 'users.token_version column for JWT revocation',
+    isSatisfied() {
+      return columnExists('users', 'token_version');
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
+  {
+    id: '0010_add_auth_login_attempts.sql',
+    description: 'durable login throttling table and index',
+    isSatisfied() {
+      return (
+        tableExists('auth_login_attempts') &&
+        indexExists('idx_auth_login_attempts_window')
+      );
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
 ];
 
 function main() {

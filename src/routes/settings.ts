@@ -4,6 +4,11 @@ import { clearSettingsCache, normalizeGravatarBaseUrl } from '../utils'
 import { authMiddleware, requireRole } from '../auth'
 
 const settings = new Hono<AppEnv>()
+const SENSITIVE_SETTING_KEYS = new Set([
+  'comment_turnstile_secret_key',
+  'resend_api_key',
+  'webhook_secret'
+])
 
 const PUBLIC_SETTING_KEYS = new Set([
   'site_title',
@@ -35,12 +40,12 @@ settings.get('/admin', authMiddleware, requireRole('administrator'), async (c) =
       ORDER BY setting_key
     `).all()
 
-    // Never send the stored Resend key back to the browser.
+    // Never send stored credentials back to the browser.
     const settingsObj: Record<string, string> = {}
     for (const row of result.results) {
       const key = row.setting_key as string
-      if (key === 'resend_api_key') {
-        settingsObj.resend_api_key_configured = String(row.setting_value || '').trim() ? '1' : '0'
+      if (SENSITIVE_SETTING_KEYS.has(key)) {
+        settingsObj[`${key}_configured`] = String(row.setting_value || '').trim() ? '1' : '0'
         continue
       }
       settingsObj[key] = row.setting_value as string
@@ -116,6 +121,10 @@ settings.put('/', authMiddleware, requireRole('administrator'), async (c) => {
     const updates = Object.entries(body)
 
     for (const [key, value] of updates) {
+      if (SENSITIVE_SETTING_KEYS.has(key) && !String(value || '').trim()) {
+        continue
+      }
+
       const settingValue = key === 'gravatar_base_url'
         ? normalizeGravatarBaseUrl(value)
         : value as string
@@ -145,8 +154,12 @@ settings.put('/', authMiddleware, requireRole('administrator'), async (c) => {
 // 更新单个设置（仅管理员）
 settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) => {
   try {
-    const key = c.req.param('key')
+    const key = c.req.param('key') || ''
     const { value } = await c.req.json()
+    if (SENSITIVE_SETTING_KEYS.has(key) && !String(value || '').trim()) {
+      return c.json({ error: 'Sensitive settings cannot be replaced with an empty value' }, 400)
+    }
+
     const settingValue = key === 'gravatar_base_url'
       ? normalizeGravatarBaseUrl(value)
       : value
@@ -165,8 +178,8 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
     return c.json({
       success: true,
       key,
-      value: key === 'resend_api_key' ? undefined : settingValue,
-      configured: key === 'resend_api_key' ? !!String(settingValue || '').trim() : undefined
+      value: SENSITIVE_SETTING_KEYS.has(key) ? undefined : settingValue,
+      configured: SENSITIVE_SETTING_KEYS.has(key) ? !!String(settingValue || '').trim() : undefined
     })
   } catch (error) {
     console.error('Error updating setting:', error)

@@ -27,6 +27,7 @@ export interface User {
   last_login: string | null;
   avatar_url: string | null;
   bio: string | null;
+  token_version: number;
 }
 
 export interface UserResponse {
@@ -251,6 +252,7 @@ export interface JWTPayload extends JoseJWTPayload {
   username: string;
   email: string;
   role: User['role'];
+  tokenVersion: number;
   iat?: number;
   exp?: number;
 }

@@ -34,10 +34,10 @@ const form = reactive({
   siteTitle: '', siteUrl: '', adminEmail: '', gravatarBaseUrl: 'https://cn.cravatar.com/avatar', siteDescription: '',
   homePostsPerPage: 15, siteKeywords: '', siteAuthor: '', siteFavicon: '', siteLogo: '', siteNotice: '', siteIcp: '', siteFooterText: '', headHtml: '',
   mailFromName: '', mailFromEmail: '', resendApiKey: '', resendApiKeyConfigured: false, mailNotificationsEnabled: false, notifyAdminOnComment: true, notifyCommenterOnReply: true,
-  commentTurnstileEnabled: false, commentTurnstileSiteKey: '', commentTurnstileSecretKey: '', commentModerationFirstComment: true,
+  commentTurnstileEnabled: false, commentTurnstileSiteKey: '', commentTurnstileSecretKey: '', commentTurnstileSecretKeyConfigured: false, commentModerationFirstComment: true,
   commentRateLimitSeconds: 30, commentMaxLinks: 2, commentSpamKeywords: '',
   socialTelegram: '', socialX: '', socialMastodon: '', socialEmail: '', socialQq: '',
-  webhookUrl: '', webhookSecret: '', webhookEvents: [] as string[],
+  webhookUrl: '', webhookSecret: '', webhookSecretConfigured: false, webhookEvents: [] as string[],
 });
 
 const language = computed({
@@ -77,11 +77,11 @@ function applySettings(data: Record<string, string>) {
     mailNotificationsEnabled: enabled(data.mail_notifications_enabled, false),
     notifyAdminOnComment: enabled(data.notify_admin_on_comment, true), notifyCommenterOnReply: enabled(data.notify_commenter_on_reply, true),
     commentTurnstileEnabled: enabled(data.comment_turnstile_enabled, false), commentTurnstileSiteKey: data.comment_turnstile_site_key || '',
-    commentTurnstileSecretKey: data.comment_turnstile_secret_key || '', commentModerationFirstComment: enabled(data.comment_moderation_first_comment, true),
+    commentTurnstileSecretKey: '', commentTurnstileSecretKeyConfigured: enabled(data.comment_turnstile_secret_key_configured, false), commentModerationFirstComment: enabled(data.comment_moderation_first_comment, true),
     commentRateLimitSeconds: Number(data.comment_rate_limit_seconds) || 30, commentMaxLinks: Number(data.comment_max_links) || 2,
     commentSpamKeywords: data.comment_spam_keywords || '', socialTelegram: data.social_telegram || '', socialX: data.social_x || '',
     socialMastodon: data.social_mastodon || '', socialEmail: data.social_email || '', socialQq: data.social_qq || '',
-    webhookUrl: data.webhook_url || '', webhookSecret: data.webhook_secret || '', webhookEvents: (data.webhook_events || '').split(',').filter(Boolean),
+    webhookUrl: data.webhook_url || '', webhookSecret: '', webhookSecretConfigured: enabled(data.webhook_secret_configured, false), webhookEvents: (data.webhook_events || '').split(',').filter(Boolean),
   });
 }
 
@@ -112,19 +112,31 @@ async function saveSettings() {
     mail_from_name: form.mailFromName, mail_from_email: form.mailFromEmail.trim(), mail_notifications_enabled: form.mailNotificationsEnabled ? '1' : '0',
     notify_admin_on_comment: form.notifyAdminOnComment ? '1' : '0', notify_commenter_on_reply: form.notifyCommenterOnReply ? '1' : '0',
     comment_turnstile_enabled: form.commentTurnstileEnabled ? '1' : '0', comment_turnstile_site_key: form.commentTurnstileSiteKey,
-    comment_turnstile_secret_key: form.commentTurnstileSecretKey, comment_moderation_first_comment: form.commentModerationFirstComment ? '1' : '0',
+    comment_moderation_first_comment: form.commentModerationFirstComment ? '1' : '0',
     comment_rate_limit_seconds: String(form.commentRateLimitSeconds || 30), comment_max_links: String(form.commentMaxLinks || 2),
     comment_spam_keywords: form.commentSpamKeywords, social_telegram: form.socialTelegram, social_x: form.socialX,
     social_mastodon: form.socialMastodon, social_email: form.socialEmail, social_qq: form.socialQq,
-    webhook_url: form.webhookUrl.trim(), webhook_secret: form.webhookSecret, webhook_events: form.webhookEvents.join(','),
+    webhook_url: form.webhookUrl.trim(), webhook_events: form.webhookEvents.join(','),
   };
   const resendApiKey = form.resendApiKey.trim();
   if (resendApiKey) payload.resend_api_key = resendApiKey;
+  const turnstileSecretKey = form.commentTurnstileSecretKey.trim();
+  if (turnstileSecretKey) payload.comment_turnstile_secret_key = turnstileSecretKey;
+  const webhookSecret = form.webhookSecret.trim();
+  if (webhookSecret) payload.webhook_secret = webhookSecret;
   try {
     await apiFetch('/settings', { method: 'PUT', body: JSON.stringify(payload) }, auth.token);
     if (resendApiKey) {
       form.resendApiKey = '';
       form.resendApiKeyConfigured = true;
+    }
+    if (turnstileSecretKey) {
+      form.commentTurnstileSecretKey = '';
+      form.commentTurnstileSecretKeyConfigured = true;
+    }
+    if (webhookSecret) {
+      form.webhookSecret = '';
+      form.webhookSecretConfigured = true;
     }
     await site.load();
     message.success(t('settings.saved'));
@@ -200,7 +212,7 @@ loadSettings();
               <label class="settings-switch-row"><span><strong>{{ t('settings.firstCommentModeration') }}</strong></span><NSwitch v-model:value="form.commentModerationFirstComment" /></label>
             </div><div class="settings-form-grid settings-grid-spaced">
               <NFormItem :label="t('settings.turnstileSiteKey')"><NInput v-model:value="form.commentTurnstileSiteKey" /></NFormItem>
-              <NFormItem :label="t('settings.turnstileSecretKey')"><NInput v-model:value="form.commentTurnstileSecretKey" type="password" show-password-on="click" /></NFormItem>
+              <NFormItem :label="t('settings.turnstileSecretKey')"><NInput v-model:value="form.commentTurnstileSecretKey" type="password" show-password-on="click" :placeholder="form.commentTurnstileSecretKeyConfigured ? t('settings.resendApiKeyConfigured') : ''" /></NFormItem>
               <NFormItem :label="t('settings.rateLimit')"><NInputNumber v-model:value="form.commentRateLimitSeconds" :min="1" /></NFormItem>
               <NFormItem :label="t('settings.maxLinks')"><NInputNumber v-model:value="form.commentMaxLinks" :min="1" /></NFormItem>
               <NFormItem class="settings-span-2" :label="t('settings.spamKeywords')"><NInput v-model:value="form.commentSpamKeywords" type="textarea" :rows="6" :placeholder="t('settings.spamKeywordsPlaceholder')" /></NFormItem>
@@ -215,7 +227,7 @@ loadSettings();
             </div></section>
             <section class="settings-section"><h2>{{ t('settings.webhookSection') }}</h2><div class="settings-form-grid">
               <NFormItem class="settings-span-2" :label="t('settings.webhookUrl')"><NInput v-model:value="form.webhookUrl" placeholder="https://example.com/webhook" :input-props="{ type: 'url' }" /></NFormItem>
-              <NFormItem class="settings-span-2" :label="t('settings.webhookSecret')"><NInput v-model:value="form.webhookSecret" type="password" show-password-on="click" /></NFormItem>
+              <NFormItem class="settings-span-2" :label="t('settings.webhookSecret')"><NInput v-model:value="form.webhookSecret" type="password" show-password-on="click" :placeholder="form.webhookSecretConfigured ? t('settings.resendApiKeyConfigured') : ''" /></NFormItem>
               <NFormItem class="settings-span-2" :label="t('settings.webhookEvents')"><NCheckboxGroup v-model:value="form.webhookEvents"><div class="settings-checkbox-grid"><NCheckbox v-for="option in webhookOptions" :key="option[0]" :value="option[0]" :label="`${option[0]} (${t(option[1])})`" /></div></NCheckboxGroup></NFormItem>
             </div></section>
           </NTabPane>

@@ -42,7 +42,7 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
-  if (!registerForm.username.trim() || !registerForm.email.trim() || registerForm.password.length < 6) return;
+  if (!registerForm.username.trim() || !registerForm.email.trim() || registerForm.password.length < 12) return;
   submitting.value = true;
   try {
     await auth.register({ ...registerForm });
@@ -113,7 +113,7 @@ async function submitRegister() {
                 <NInput v-model:value="registerForm.email" type="text" :input-props="{ autocomplete: 'email', type: 'email' }"><template #prefix><NIcon><Mail /></NIcon></template></NInput>
               </NFormItem>
               <NFormItem :label="t('login.password')">
-                <NInput v-model:value="registerForm.password" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password' }"><template #prefix><NIcon><LockKeyhole /></NIcon></template></NInput>
+                <NInput v-model:value="registerForm.password" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password', minlength: 12 }"><template #prefix><NIcon><LockKeyhole /></NIcon></template></NInput>
               </NFormItem>
               <NButton type="primary" block size="large" :loading="submitting" @click="submitRegister">
                 {{ submitting ? t('login.creating') : t('login.create') }}

@@ -565,9 +565,6 @@ export async function formatUserResponse(
       48: user.avatar_url || buildGravatarUrl(emailHash, 48, gravatarBaseUrl),
       96: user.avatar_url || buildGravatarUrl(emailHash, 96, gravatarBaseUrl)
     },
-    roles: [user.role],
-    role: user.role, // For backward compatibility
-    registered_date: user.registered_at,
     meta: [],
     _links: {
       self: [{ href: `${baseUrl}/wp-json/wp/v2/users/${user.id}` }],
@@ -578,6 +575,9 @@ export async function formatUserResponse(
   // Only include email for admin users
   if (isAdmin) {
     response.email = user.email;
+    response.roles = [user.role];
+    response.role = user.role;
+    response.registered_date = user.registered_at;
   }
 
   return response;
