@@ -7,6 +7,7 @@
 - `0001_add_sticky_to_posts.sql` - ✅ 已应用 - 为 posts 表添加 sticky 字段，用于支持文章置顶功能
 - `0006_add_gravatar_base_url.sql` - 为站点设置增加可配置的 Gravatar 镜像地址
 - `0007_normalize_media_urls.sql` - 将媒体地址转换为不含域名的相对路径
+- `0008_add_resend_api_key_setting.sql` - 在受保护的站点设置中保存 Resend API Key
 
 ## 如何应用迁移
 

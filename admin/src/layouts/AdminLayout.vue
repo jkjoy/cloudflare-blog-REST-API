@@ -55,11 +55,7 @@ const userOptions = computed(() => [
 
 function openItem(item: (typeof navItems.value)[number]) {
   drawerOpen.value = false;
-  if (item.path) {
-    router.push(item.path);
-    return;
-  }
-  window.location.assign(`/wp-admin/legacy?route=${encodeURIComponent(item.key)}`);
+  router.push(item.path);
 }
 
 function handleUserAction(key: string) {

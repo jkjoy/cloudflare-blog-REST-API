@@ -107,7 +107,8 @@ const messages = {
       adminEmail: '管理员邮箱', gravatarBaseUrl: '头像镜像地址', siteDescription: '站点描述', homePostsPerPage: '首页文章数量',
       siteKeywords: '站点关键词', keywordsPlaceholder: '使用英文逗号分隔', siteAuthor: '站点作者', brandSection: '品牌与页面元素',
       siteFavicon: '站点图标地址', siteLogo: '站点 Logo 地址', siteNotice: '站点公告', siteIcp: 'ICP备案号', footerText: '页脚文字', headHtml: '页头自定义 HTML',
-      mailSection: '邮件通知', fromName: '发件人名称', fromEmail: '发件邮箱', enableMail: '启用邮件通知', enableMailHint: '需要在部署环境中配置 Resend API Key。',
+      mailSection: '邮件通知', resendApiKey: 'Resend API Key', resendApiKeyPlaceholder: '填写 Resend API Key', resendApiKeyConfigured: '已配置，留空则保持不变',
+      fromName: '发件人名称', fromEmail: '发件邮箱', enableMail: '启用邮件通知', enableMailHint: '邮件服务使用后台保存的 Resend API Key。',
       notifyAdmin: '新评论通知管理员', notifyCommenter: '回复评论时通知评论者', commentSection: '评论防护', enableTurnstile: '启用 Cloudflare Turnstile',
       enableTurnstileHint: '开启后，访客提交评论时需要通过验证。', firstCommentModeration: '首次评论进入待审核', turnstileSiteKey: 'Turnstile Site Key',
       turnstileSecretKey: 'Turnstile Secret Key', rateLimit: '评论间隔（秒）', maxLinks: '评论允许的最大链接数', spamKeywords: '垃圾评论关键词',
@@ -181,7 +182,7 @@ const messages = {
       categorySaveFailed: '保存链接分类失败', categoryDeleted: '链接分类已删除', categoryDeleteFailed: '删除链接分类失败',
       categoryDeleteConfirm: '删除后，该分类中的链接会转入默认分类。确定继续吗？',
     },
-    common: { account: '账户菜单', logout: '退出登录', language: 'English', legacy: '兼容后台', siteHome: '网站首页', retry: '重试' },
+    common: { account: '账户菜单', logout: '退出登录', language: 'English', siteHome: '网站首页', retry: '重试' },
   },
   en: {
     brandSuffix: 'Admin',
@@ -287,7 +288,8 @@ const messages = {
       adminEmail: 'Administrator email', gravatarBaseUrl: 'Avatar mirror URL', siteDescription: 'Site description', homePostsPerPage: 'Posts per home page',
       siteKeywords: 'Site keywords', keywordsPlaceholder: 'Separate with commas', siteAuthor: 'Site author', brandSection: 'Brand and page elements',
       siteFavicon: 'Favicon URL', siteLogo: 'Site logo URL', siteNotice: 'Site notice', siteIcp: 'ICP registration', footerText: 'Footer text', headHtml: 'Custom head HTML',
-      mailSection: 'Email notifications', fromName: 'From name', fromEmail: 'From email', enableMail: 'Enable email notifications', enableMailHint: 'A Resend API key must be configured in the deployment environment.',
+      mailSection: 'Email notifications', resendApiKey: 'Resend API Key', resendApiKeyPlaceholder: 'Enter the Resend API key', resendApiKeyConfigured: 'Configured; leave blank to keep it unchanged',
+      fromName: 'From name', fromEmail: 'From email', enableMail: 'Enable email notifications', enableMailHint: 'Email uses the Resend API key saved in site settings.',
       notifyAdmin: 'Notify administrators about new comments', notifyCommenter: 'Notify commenters about replies', commentSection: 'Comment protection', enableTurnstile: 'Enable Cloudflare Turnstile',
       enableTurnstileHint: 'Visitors must complete verification before submitting comments.', firstCommentModeration: 'Hold first comments for moderation', turnstileSiteKey: 'Turnstile Site Key',
       turnstileSecretKey: 'Turnstile Secret Key', rateLimit: 'Comment interval (seconds)', maxLinks: 'Maximum links per comment', spamKeywords: 'Spam keywords',
@@ -361,7 +363,7 @@ const messages = {
       categorySaveFailed: 'Unable to save link category', categoryDeleted: 'Link category deleted', categoryDeleteFailed: 'Unable to delete link category',
       categoryDeleteConfirm: 'Links in this category will move to the default category. Continue?',
     },
-    common: { account: 'Account menu', logout: 'Sign out', language: '中文', legacy: 'Compatible admin', siteHome: 'View site', retry: 'Retry' },
+    common: { account: 'Account menu', logout: 'Sign out', language: '中文', siteHome: 'View site', retry: 'Retry' },
   },
 } as const;
 

@@ -23,11 +23,11 @@ CFBlog 是一个类似 WordPress 的博客系统，使用 Cloudflare 生态系�
 - Vue 3 + Vite - 新版管理后台
 - Pinia + Vue Router - 后台状态与路由
 - Naive UI + Lucide - 后台组件与图标
-- 原生 CSS + 少量原生 JavaScript - 公开前台与兼容后台
+- 原生 CSS + 少量原生 JavaScript - 公开前台
 - Workers Assets - 托管 `public/` 下的主题静态资源
 - 一体化部署: 前台、后台、API 同域同服务
 
-新版后台采用增量迁移：`/wp-admin` 已使用 Vue 3，登录、响应式框架、仪表盘、文章与页面编辑器、文章列表、页面列表、动态管理、分类、标签、媒体库、链接与链接分类、统一评论管理、内容导入、用户管理和系统设置已完成迁移；尚未迁移的管理页面会进入 `/wp-admin/legacy`，迁移期间两套界面共用原有 API 与登录状态。
+`/wp-admin` 后台已全部使用 Vue 3，包含登录、仪表盘、内容管理、媒体库、评论、用户与系统设置等完整功能。
 
 ## 功能特性
 
@@ -269,13 +269,7 @@ wrangler secret put JWT_SECRET
 
 然后在 Cloudflare 端维护生产密钥。
 
-如果你要启用评论邮件通知，还需要额外配置 Resend API Key：
-
-```bash
-wrangler secret put RESEND_API_KEY
-```
-
-同时请在 Resend 后台验证发件域名，并在后台设置页填写 `From Email`。
+如果你要启用评论邮件通知，请先在 Resend 后台验证发件域名，再到后台邮件设置中填写 `Resend API Key` 和 `From Email`。API Key 保存在 D1 的受保护设置中，不会通过公开设置 API 返回。
 
 评论防护中的 Turnstile 密钥不放在 Worker Secret 中，而是在后台设置页中保存：
 
@@ -308,6 +302,9 @@ npm run db:migrate:remote
 - `0003_add_mail_notification_settings.sql`
 - `0004_add_moment_meta.sql`
 - `0005_add_comment_protection_settings.sql`
+- `0006_add_gravatar_base_url.sql`
+- `0007_normalize_media_urls.sql`
+- `0008_add_resend_api_key_setting.sql`
 
 ## 部署
 
@@ -325,8 +322,8 @@ npm run deploy
 
 1. 配置 `wrangler.toml` 中的 D1 / R2 / AI 绑定
 2. 初始化数据库或执行迁移
-3. 如需邮件通知，执行 `wrangler secret put RESEND_API_KEY`
-4. 执行 `wrangler deploy`
+3. 执行 `wrangler deploy`
+4. 如需邮件通知，在后台邮件设置中填写 Resend API Key
 
 ### GitHub Actions 自动部署
 
@@ -374,16 +371,15 @@ npx wrangler secret list
 - 如果你修改了 `schema.sql`，请同步整理对应的 `migrations/*.sql`，尤其是需要兼容旧库时
 - 已经应用到生产环境的迁移文件不要再修改，只新增新的迁移文件
 - 远端已有 `JWT_SECRET` 时不会覆盖；远端缺失时才从 GitHub Secret 写入
-- `RESEND_API_KEY` 需要通过 `wrangler secret put RESEND_API_KEY` 配置到 Worker，不需要放到 GitHub Actions Secrets
+- Resend API Key 通过管理员后台写入 D1，不需要配置为 Worker 或 GitHub Actions Secret
 
 ### 配置评论邮件通知
 
 1. 在 Resend 中验证你的发件域名。
-2. 执行 `wrangler secret put RESEND_API_KEY`，把 API Key 配置到 Worker。
-3. 部署后进入 `/wp-admin -> Settings`。
-4. 填写 `From Name` 和 `From Email`。
-5. 打开 `Enable email notifications`。
-6. 按需勾选：
+2. 部署后进入 `/wp-admin -> Settings -> Email`。
+3. 填写 `Resend API Key`、`From Name` 和 `From Email`。
+4. 打开 `Enable email notifications`。
+5. 按需勾选：
    - 新评论时通知管理员
    - 有新回复时通知评论者
 
@@ -433,8 +429,7 @@ npm run admin:dev
 本地站点将运行在 http://127.0.0.1:8787
 
 - 前台首页: `http://127.0.0.1:8787/`
-- 新版后台: `http://127.0.0.1:8787/wp-admin`
-- 兼容后台: `http://127.0.0.1:8787/wp-admin/legacy`
+- 管理后台: `http://127.0.0.1:8787/wp-admin`
 - API Root: `http://127.0.0.1:8787/wp-json/`
 
 ## REST API

@@ -33,7 +33,7 @@ const activeTab = ref('general');
 const form = reactive({
   siteTitle: '', siteUrl: '', adminEmail: '', gravatarBaseUrl: 'https://cn.cravatar.com/avatar', siteDescription: '',
   homePostsPerPage: 15, siteKeywords: '', siteAuthor: '', siteFavicon: '', siteLogo: '', siteNotice: '', siteIcp: '', siteFooterText: '', headHtml: '',
-  mailFromName: '', mailFromEmail: '', mailNotificationsEnabled: false, notifyAdminOnComment: true, notifyCommenterOnReply: true,
+  mailFromName: '', mailFromEmail: '', resendApiKey: '', resendApiKeyConfigured: false, mailNotificationsEnabled: false, notifyAdminOnComment: true, notifyCommenterOnReply: true,
   commentTurnstileEnabled: false, commentTurnstileSiteKey: '', commentTurnstileSecretKey: '', commentModerationFirstComment: true,
   commentRateLimitSeconds: 30, commentMaxLinks: 2, commentSpamKeywords: '',
   socialTelegram: '', socialX: '', socialMastodon: '', socialEmail: '', socialQq: '',
@@ -73,7 +73,8 @@ function applySettings(data: Record<string, string>) {
     homePostsPerPage: Number(data.home_posts_per_page) || 15, siteKeywords: data.site_keywords || '', siteAuthor: data.site_author || '',
     siteFavicon: data.site_favicon || '', siteLogo: data.site_logo || '', siteNotice: data.site_notice || '', siteIcp: data.site_icp || '',
     siteFooterText: data.site_footer_text || '', headHtml: data.head_html || '', mailFromName: data.mail_from_name || data.site_title || '',
-    mailFromEmail: data.mail_from_email || '', mailNotificationsEnabled: enabled(data.mail_notifications_enabled, false),
+    mailFromEmail: data.mail_from_email || '', resendApiKey: '', resendApiKeyConfigured: enabled(data.resend_api_key_configured, false),
+    mailNotificationsEnabled: enabled(data.mail_notifications_enabled, false),
     notifyAdminOnComment: enabled(data.notify_admin_on_comment, true), notifyCommenterOnReply: enabled(data.notify_commenter_on_reply, true),
     commentTurnstileEnabled: enabled(data.comment_turnstile_enabled, false), commentTurnstileSiteKey: data.comment_turnstile_site_key || '',
     commentTurnstileSecretKey: data.comment_turnstile_secret_key || '', commentModerationFirstComment: enabled(data.comment_moderation_first_comment, true),
@@ -103,7 +104,7 @@ async function saveSettings() {
     return;
   }
   saving.value = true;
-  const payload = {
+  const payload: Record<string, string> = {
     site_title: form.siteTitle.trim(), site_url: form.siteUrl.trim(), admin_email: form.adminEmail.trim(), gravatar_base_url: form.gravatarBaseUrl.trim(),
     site_description: form.siteDescription, home_posts_per_page: String(form.homePostsPerPage || 15), site_keywords: form.siteKeywords,
     site_author: form.siteAuthor, site_favicon: form.siteFavicon.trim(), site_logo: form.siteLogo.trim(), site_notice: form.siteNotice,
@@ -117,8 +118,14 @@ async function saveSettings() {
     social_mastodon: form.socialMastodon, social_email: form.socialEmail, social_qq: form.socialQq,
     webhook_url: form.webhookUrl.trim(), webhook_secret: form.webhookSecret, webhook_events: form.webhookEvents.join(','),
   };
+  const resendApiKey = form.resendApiKey.trim();
+  if (resendApiKey) payload.resend_api_key = resendApiKey;
   try {
     await apiFetch('/settings', { method: 'PUT', body: JSON.stringify(payload) }, auth.token);
+    if (resendApiKey) {
+      form.resendApiKey = '';
+      form.resendApiKeyConfigured = true;
+    }
     await site.load();
     message.success(t('settings.saved'));
   } catch (error) {
@@ -169,6 +176,15 @@ loadSettings();
 
           <NTabPane name="mail" :tab="t('settings.mailTab')">
             <section class="settings-section"><h2>{{ t('settings.mailSection') }}</h2><div class="settings-form-grid">
+              <NFormItem class="settings-span-2" :label="t('settings.resendApiKey')">
+                <NInput
+                  v-model:value="form.resendApiKey"
+                  type="password"
+                  show-password-on="click"
+                  :placeholder="form.resendApiKeyConfigured ? t('settings.resendApiKeyConfigured') : t('settings.resendApiKeyPlaceholder')"
+                  :input-props="{ autocomplete: 'new-password' }"
+                />
+              </NFormItem>
               <NFormItem :label="t('settings.fromName')"><NInput v-model:value="form.mailFromName" /></NFormItem>
               <NFormItem :label="t('settings.fromEmail')"><NInput v-model:value="form.mailFromEmail" placeholder="notifications@example.com" :input-props="{ type: 'email' }" /></NFormItem>
             </div><div class="settings-switch-list">

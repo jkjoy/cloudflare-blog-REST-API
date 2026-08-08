@@ -287,6 +287,7 @@ INSERT OR IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('notify_commenter_on_reply', '1'),
 ('mail_from_name', 'CFBlog'),
 ('mail_from_email', ''),
+('resend_api_key', ''),
 ('site_favicon', ''),
 ('site_logo', ''),
 ('site_notice', ''),

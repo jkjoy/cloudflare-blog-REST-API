@@ -227,6 +227,17 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0008_add_resend_api_key_setting.sql',
+    description: 'Resend API key in protected site settings',
+    isSatisfied() {
+      return siteSettingsExist(['resend_api_key']);
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
 ];
 
 function main() {

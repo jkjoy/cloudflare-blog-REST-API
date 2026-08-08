@@ -110,17 +110,11 @@ function buildEmailLayout(
 }
 
 async function sendResendEmail(
-  env: Env,
+  apiKey: string,
   fromName: string,
   fromEmail: string,
   message: MailMessage,
 ): Promise<boolean> {
-  const apiKey = env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn('[Mail] Skipped sending email: RESEND_API_KEY is not configured.');
-    return false;
-  }
-
   const payload: Record<string, unknown> = {
     from: formatFromAddress(fromName, fromEmail),
     to: message.to,
@@ -162,13 +156,13 @@ async function sendResendEmail(
 }
 
 async function deliverResendEmail(
-  env: Env,
+  apiKey: string,
   fromName: string,
   fromEmail: string,
   message: MailMessage,
 ): Promise<boolean> {
   try {
-    return await sendResendEmail(env, fromName, fromEmail, message);
+    return await sendResendEmail(apiKey, fromName, fromEmail, message);
   } catch (error) {
     console.error(`[Mail] Failed ${message.idempotencyKey}:`, error);
     return false;
@@ -187,6 +181,12 @@ export async function sendCommentNotifications(
 
     const settings = await getSiteSettings(env);
     if (!isSettingEnabled(settings.mail_notifications_enabled)) {
+      return;
+    }
+
+    const apiKey = String(settings.resend_api_key || '').trim();
+    if (!apiKey) {
+      console.warn('[Mail] Skipped sending email: Resend API key is not configured in site settings.');
       return;
     }
 
@@ -255,7 +255,7 @@ export async function sendCommentNotifications(
         `View: ${commentLink}`,
       ].join('\n');
 
-      adminNotificationSent = await deliverResendEmail(env, fromName, fromEmail, {
+      adminNotificationSent = await deliverResendEmail(apiKey, fromName, fromEmail, {
         to: [adminEmail],
         subject: adminSubject,
         html: buildEmailLayout(siteTitle, adminHeading, adminBodyHtml, 'View Comment', commentLink),
@@ -328,7 +328,7 @@ export async function sendCommentNotifications(
       `View the discussion: ${commentLink}`,
     ].join('\n');
 
-    await deliverResendEmail(env, fromName, fromEmail, {
+    await deliverResendEmail(apiKey, fromName, fromEmail, {
       to: [replyTargetEmail],
       subject: replySubject,
       html: buildEmailLayout(siteTitle, replyHeading, replyBodyHtml, 'View Reply', commentLink),

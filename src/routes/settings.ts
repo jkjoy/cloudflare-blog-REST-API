@@ -26,7 +26,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'site_footer_text'
 ])
 
-// 获取所有系统设置（管理员专用，包含敏感字段）
+// 获取所有系统设置（管理员专用，密钥只返回配置状态）
 settings.get('/admin', authMiddleware, requireRole('administrator'), async (c) => {
   try {
     const result = await c.env.DB.prepare(`
@@ -35,10 +35,15 @@ settings.get('/admin', authMiddleware, requireRole('administrator'), async (c) =
       ORDER BY setting_key
     `).all()
 
-    // 将结果转换为对象格式，包含所有字段（包括敏感字段）
+    // Never send the stored Resend key back to the browser.
     const settingsObj: Record<string, string> = {}
     for (const row of result.results) {
-      settingsObj[row.setting_key as string] = row.setting_value as string
+      const key = row.setting_key as string
+      if (key === 'resend_api_key') {
+        settingsObj.resend_api_key_configured = String(row.setting_value || '').trim() ? '1' : '0'
+        continue
+      }
+      settingsObj[key] = row.setting_value as string
     }
 
     return c.json(settingsObj)
@@ -160,7 +165,8 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
     return c.json({
       success: true,
       key,
-      value: settingValue
+      value: key === 'resend_api_key' ? undefined : settingValue,
+      configured: key === 'resend_api_key' ? !!String(settingValue || '').trim() : undefined
     })
   } catch (error) {
     console.error('Error updating setting:', error)

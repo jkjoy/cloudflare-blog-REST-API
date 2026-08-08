@@ -107,15 +107,9 @@ npx wrangler secret put JWT_SECRET
 
 然后把同一个新值更新到 GitHub Repository Secret。轮换后，使用旧密钥签发的后台登录令牌会失效，管理员需要重新登录。
 
-## 其他生产环境 Secret
+## 其他生产环境设置
 
-邮件通知使用的 `RESEND_API_KEY` 当前不由 GitHub Actions 自动管理。需要时单独执行：
-
-```bash
-npx wrangler secret put RESEND_API_KEY
-```
-
-Turnstile Site Key 和 Secret Key 通过后台设置页保存，不属于 Worker Secret。
+Resend API Key、Turnstile Site Key 和 Turnstile Secret Key 均通过后台设置页保存到 D1，不属于 Worker Secret，也不会通过公开设置 API 返回。
 
 ## 部署后检查
 
