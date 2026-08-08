@@ -13,6 +13,7 @@ import {
   parseSqlOrder
 } from '../utils';
 import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
+import { sendCommentNotifications } from '../mail';
 import {
   applyCountDelta,
   getApprovedStatusDelta,
@@ -27,6 +28,11 @@ function getBaseUrl(value: unknown): string {
 
 function normalizeEmail(value: unknown): string {
   return String(value || '').trim().toLowerCase();
+}
+
+function getMomentNotificationTitle(moment: any): string {
+  const preview = String(moment?.content || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return preview ? `[Moment] ${preview}` : '[Moment]';
 }
 
 async function getAdminAvatarUrl(adminEmail: unknown, gravatarBaseUrl?: unknown): Promise<string> {
@@ -445,6 +451,7 @@ moments.post('/:id/comments', optionalAuthMiddleware, async (c) => {
     let commentAuthorName = author_name;
     let commentAuthorEmail = author_email;
     let commentAuthorUrl = author_url;
+    let parentCommentRecord: any = null;
 
     try {
       const user = (c as any).get('user') as JWTPayload;
@@ -480,14 +487,14 @@ moments.post('/:id/comments', optionalAuthMiddleware, async (c) => {
     }
 
     if (parent) {
-      const parentComment = await c.env.DB.prepare(`
-        SELECT id
+      parentCommentRecord = await c.env.DB.prepare(`
+        SELECT id, author_name, author_email, content
         FROM moment_comments
         WHERE id = ?
           AND moment_id = ?
       `).bind(parent, momentId).first();
 
-      if (!parentComment) {
+      if (!parentCommentRecord) {
         return createWPError('rest_comment_invalid_parent', 'Invalid parent comment ID.', 400);
       }
     }
@@ -541,7 +548,23 @@ moments.post('/:id/comments', optionalAuthMiddleware, async (c) => {
       WHERE id = ?
     `).bind(result.meta.last_row_id).first<any>();
 
-    return c.json(formatMomentCommentResponse(newComment, baseUrl, !!userId), 201);
+    const formattedComment = formatMomentCommentResponse(newComment, baseUrl, !!userId);
+
+    c.executionCtx.waitUntil(
+      sendCommentNotifications(c.env, {
+        comment: newComment,
+        idempotencyKeyPrefix: 'moment-comment',
+        parentComment: parentCommentRecord,
+        post: {
+          id: momentId,
+          slug: 'talking',
+          title: getMomentNotificationTitle(moment)
+        },
+        commentLink: formattedComment.link
+      })
+    );
+
+    return c.json(formattedComment, 201);
   } catch (error) {
     console.error('Error creating moment comment:', error);
     return createWPError('create_error', 'Failed to create moment comment', 500);
@@ -631,7 +654,38 @@ moments.put('/:id/comments/:commentId', authMiddleware, async (c) => {
         AND moment_id = ?
     `).bind(commentId, momentId).first<any>();
 
-    return c.json(formatMomentCommentResponse(updatedComment, baseUrl, true));
+    const formattedComment = formatMomentCommentResponse(updatedComment, baseUrl, true);
+
+    if (existingComment.status !== 'approved' && nextStatus === 'approved') {
+      const [parentCommentRecord, moment] = await Promise.all([
+        updatedComment.parent_id
+          ? c.env.DB.prepare(`
+              SELECT id, author_name, author_email, content
+              FROM moment_comments
+              WHERE id = ?
+                AND moment_id = ?
+            `).bind(updatedComment.parent_id, momentId).first<any>()
+          : Promise.resolve(null),
+        getMomentOr404(c.env, momentId)
+      ]);
+
+      c.executionCtx.waitUntil(
+        sendCommentNotifications(c.env, {
+          comment: updatedComment,
+          idempotencyKeyPrefix: 'moment-comment',
+          parentComment: parentCommentRecord,
+          notifyAdmin: false,
+          post: {
+            id: momentId,
+            slug: 'talking',
+            title: getMomentNotificationTitle(moment)
+          },
+          commentLink: formattedComment.link
+        })
+      );
+    }
+
+    return c.json(formattedComment);
   } catch (error) {
     console.error('Error updating moment comment:', error);
     return createWPError('update_error', 'Failed to update moment comment', 500);

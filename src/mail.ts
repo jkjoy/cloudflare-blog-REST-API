@@ -12,6 +12,7 @@ interface MailMessage {
 
 interface CommentNotificationContext {
   comment: Pick<Comment, 'id' | 'author_name' | 'author_email' | 'content' | 'created_at' | 'parent_id' | 'status'>;
+  idempotencyKeyPrefix?: string;
   parentComment?: Pick<Comment, 'id' | 'author_name' | 'author_email' | 'content'> | null;
   notifyAdmin?: boolean;
   post: {
@@ -113,11 +114,11 @@ async function sendResendEmail(
   fromName: string,
   fromEmail: string,
   message: MailMessage,
-): Promise<void> {
+): Promise<boolean> {
   const apiKey = env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn('[Mail] Skipped sending email: RESEND_API_KEY is not configured.');
-    return;
+    return false;
   }
 
   const payload: Record<string, unknown> = {
@@ -142,9 +143,35 @@ async function sendResendEmail(
     body: JSON.stringify(payload),
   });
 
+  const responseText = await response.text();
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Resend API error ${response.status}: ${errorText}`);
+    throw new Error(`Resend API error ${response.status}: ${responseText}`);
+  }
+
+  let emailId = '';
+  try {
+    emailId = String((JSON.parse(responseText) as { id?: unknown }).id || '');
+  } catch {
+    // Keep successful non-JSON responses observable without failing delivery.
+  }
+
+  console.info(
+    `[Mail] Sent ${message.idempotencyKey}${emailId ? ` with Resend ID ${emailId}` : ''}.`
+  );
+  return true;
+}
+
+async function deliverResendEmail(
+  env: Env,
+  fromName: string,
+  fromEmail: string,
+  message: MailMessage,
+): Promise<boolean> {
+  try {
+    return await sendResendEmail(env, fromName, fromEmail, message);
+  } catch (error) {
+    console.error(`[Mail] Failed ${message.idempotencyKey}:`, error);
+    return false;
   }
 }
 
@@ -181,6 +208,7 @@ export async function sendCommentNotifications(
       ? `${siteUrl}/${String(context.post.slug).trim()}#comment-${context.comment.id}`
       : `${siteUrl}/posts/${context.post.id}#comment-${context.comment.id}`;
     const commentLink = String(context.commentLink || '').trim() || fallbackLink;
+    const idempotencyKeyPrefix = context.idempotencyKeyPrefix || 'comment';
     const isReply = Number(context.comment.parent_id || 0) > 0;
     const isPending = commentStatus === 'pending';
 
@@ -191,6 +219,7 @@ export async function sendCommentNotifications(
       : '';
     const shouldNotifyAdmin = context.notifyAdmin !== false && adminNotificationsEnabled;
 
+    let adminNotificationSent = false;
     if (shouldNotifyAdmin) {
       const adminHeading = isPending
         ? `A new ${isReply ? 'reply' : 'comment'} is awaiting moderation`
@@ -226,13 +255,13 @@ export async function sendCommentNotifications(
         `View: ${commentLink}`,
       ].join('\n');
 
-      await sendResendEmail(env, fromName, fromEmail, {
+      adminNotificationSent = await deliverResendEmail(env, fromName, fromEmail, {
         to: [adminEmail],
         subject: adminSubject,
         html: buildEmailLayout(siteTitle, adminHeading, adminBodyHtml, 'View Comment', commentLink),
         text: adminText,
         replyTo: isValidEmail(commentAuthorEmail) ? commentAuthorEmail : undefined,
-        idempotencyKey: `comment-admin-${context.comment.id}`,
+        idempotencyKey: `${idempotencyKeyPrefix}-admin-${context.comment.id}`,
       });
     }
 
@@ -257,7 +286,8 @@ export async function sendCommentNotifications(
 
     if (
       adminRecipientNormalized &&
-      normalizeEmail(replyTargetEmail) === adminRecipientNormalized
+      normalizeEmail(replyTargetEmail) === adminRecipientNormalized &&
+      adminNotificationSent
     ) {
       return;
     }
@@ -298,12 +328,12 @@ export async function sendCommentNotifications(
       `View the discussion: ${commentLink}`,
     ].join('\n');
 
-    await sendResendEmail(env, fromName, fromEmail, {
+    await deliverResendEmail(env, fromName, fromEmail, {
       to: [replyTargetEmail],
       subject: replySubject,
       html: buildEmailLayout(siteTitle, replyHeading, replyBodyHtml, 'View Reply', commentLink),
       text: replyText,
-      idempotencyKey: `comment-reply-${context.comment.id}`,
+      idempotencyKey: `${idempotencyKeyPrefix}-reply-${context.comment.id}`,
     });
   } catch (error) {
     console.error('[Mail] Failed to send comment notifications:', error);
