@@ -13,6 +13,7 @@ interface MailMessage {
 interface CommentNotificationContext {
   comment: Pick<Comment, 'id' | 'author_name' | 'author_email' | 'content' | 'created_at' | 'parent_id' | 'status'>;
   parentComment?: Pick<Comment, 'id' | 'author_name' | 'author_email' | 'content'> | null;
+  notifyAdmin?: boolean;
   post: {
     id: number;
     slug?: string | null;
@@ -152,7 +153,8 @@ export async function sendCommentNotifications(
   context: CommentNotificationContext,
 ): Promise<void> {
   try {
-    if (String(context.comment.status || 'approved') !== 'approved') {
+    const commentStatus = String(context.comment.status || 'approved');
+    if (!['approved', 'pending'].includes(commentStatus)) {
       return;
     }
 
@@ -180,17 +182,22 @@ export async function sendCommentNotifications(
       : `${siteUrl}/posts/${context.post.id}#comment-${context.comment.id}`;
     const commentLink = String(context.commentLink || '').trim() || fallbackLink;
     const isReply = Number(context.comment.parent_id || 0) > 0;
+    const isPending = commentStatus === 'pending';
 
-    let adminRecipientNormalized = '';
-    const shouldNotifyAdmin =
+    const adminNotificationsEnabled =
       isSettingEnabled(settings.notify_admin_on_comment) && isValidEmail(adminEmail);
+    const adminRecipientNormalized = adminNotificationsEnabled
+      ? normalizeEmail(adminEmail)
+      : '';
+    const shouldNotifyAdmin = context.notifyAdmin !== false && adminNotificationsEnabled;
 
     if (shouldNotifyAdmin) {
-      adminRecipientNormalized = normalizeEmail(adminEmail);
-      const adminHeading = isReply ? 'A new reply was posted' : 'A new comment was posted';
-      const adminSubject = isReply
-        ? `[${siteTitle}] New reply on "${postTitle}"`
-        : `[${siteTitle}] New comment on "${postTitle}"`;
+      const adminHeading = isPending
+        ? `A new ${isReply ? 'reply' : 'comment'} is awaiting moderation`
+        : `A new ${isReply ? 'reply' : 'comment'} was posted`;
+      const adminSubject = isPending
+        ? `[${siteTitle}] ${isReply ? 'Reply' : 'Comment'} awaiting moderation on "${postTitle}"`
+        : `[${siteTitle}] New ${isReply ? 'reply' : 'comment'} on "${postTitle}"`;
       const adminBodyHtml = `
         <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">
           <strong>${escapeHtml(commentAuthorName)}</strong> left ${isReply ? 'a reply' : 'a comment'} on
@@ -229,6 +236,10 @@ export async function sendCommentNotifications(
       });
     }
 
+    if (commentStatus !== 'approved') {
+      return;
+    }
+
     const replyTargetEmail = String(context.parentComment?.author_email || '').trim();
     const shouldNotifyCommenter =
       isReply &&
@@ -246,8 +257,7 @@ export async function sendCommentNotifications(
 
     if (
       adminRecipientNormalized &&
-      normalizeEmail(replyTargetEmail) === adminRecipientNormalized &&
-      shouldNotifyAdmin
+      normalizeEmail(replyTargetEmail) === adminRecipientNormalized
     ) {
       return;
     }

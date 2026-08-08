@@ -551,6 +551,30 @@ comments.put('/:id', authMiddleware, async (c) => {
     // Trigger webhook for comment update
     await sendWebhook(c.env, 'comment.updated', formattedComment);
 
+    if (existingComment.status !== 'approved' && nextStatus === 'approved') {
+      const parentCommentRecord = updatedComment.parent_id
+        ? await c.env.DB.prepare(
+            'SELECT id, post_id, author_name, author_email, content FROM comments WHERE id = ?'
+          )
+            .bind(updatedComment.parent_id)
+            .first<ParentCommentRecord>()
+        : null;
+
+      c.executionCtx.waitUntil(
+        sendCommentNotifications(c.env, {
+          comment: updatedComment,
+          parentComment: parentCommentRecord,
+          notifyAdmin: false,
+          post: {
+            id: updatedComment.post_id,
+            slug: updatedComment.post_slug,
+            title: updatedComment.post_title
+          },
+          commentLink: formattedComment.link
+        })
+      );
+    }
+
     return c.json(formattedComment);
   } catch (error: any) {
     return createWPError('rest_internal_error', error.message, 500);
