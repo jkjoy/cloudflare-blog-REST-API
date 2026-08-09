@@ -162,7 +162,6 @@ loadSettings();
   <section class="settings-view">
     <header class="view-header content-view-header">
       <div><p class="view-eyebrow">{{ t('settings.manage') }}</p><h1>{{ t('settings.title') }}</h1><p class="view-description">{{ t('settings.description') }}</p></div>
-      <NButton type="primary" :loading="saving" :disabled="loading" @click="saveSettings"><template #icon><NIcon><Save /></NIcon></template>{{ t('settings.save') }}</NButton>
     </header>
 
     <NSpin :show="loading">
@@ -252,7 +251,7 @@ loadSettings();
             </div></section>
           </NTabPane>
         </NTabs>
-        <div class="settings-savebar"><span>{{ t('settings.saveHint') }}</span><NButton type="primary" attr-type="submit" :loading="saving"><template #icon><NIcon><Save /></NIcon></template>{{ t('settings.save') }}</NButton></div>
+        <div class="settings-savebar"><span>{{ t('settings.saveHint') }}</span><NButton type="primary" :loading="saving" :disabled="loading" @click="saveSettings"><template #icon><NIcon><Save /></NIcon></template>{{ t('settings.save') }}</NButton></div>
       </NForm>
     </NSpin>
   </section>

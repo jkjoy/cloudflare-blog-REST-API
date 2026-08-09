@@ -915,8 +915,13 @@ a {
 }
 
 .editor-sidebar-section .n-date-picker,
-.editor-sidebar-section .n-select {
+.editor-sidebar-section .n-select,
+.editor-sidebar-section .n-input-number {
   width: 100%;
+}
+
+.editor-sidebar-section .n-input-number {
+  font-variant-numeric: tabular-nums;
 }
 
 .editor-switch-row {

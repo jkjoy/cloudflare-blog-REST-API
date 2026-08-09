@@ -1,12 +1,19 @@
 import { Hono } from 'hono';
 import type { AppEnv, JWTPayload, Post } from '../types';
 import { authMiddleware, optionalAuthMiddleware, requireRole } from '../auth';
+import { clearPublicSiteCommonCache } from '../public-site/cache';
 import { canViewNonPublicContent, generateSlug, getSiteSettings, parsePageParam, parsePerPageParam } from '../utils';
 
 const pages = new Hono<AppEnv>();
 
 interface PageWithAuthorRow extends Post {
   author_name: string | null;
+}
+
+export function normalizeMenuPriority(value: unknown): number {
+  const priority = Number(value);
+  if (!Number.isFinite(priority)) return 0;
+  return Math.max(0, Math.min(9999, Math.trunc(priority)));
 }
 
 function formatPageResponse(page: PageWithAuthorRow, baseUrl: string) {
@@ -31,6 +38,8 @@ function formatPageResponse(page: PageWithAuthorRow, baseUrl: string) {
     featured_media: page.featured_image || '',
     comment_status: page.comment_status,
     parent: page.parent_id || 0,
+    menu_hidden: Boolean(page.menu_hidden),
+    menu_priority: Number(page.menu_priority || 0),
     _links: {
       self: [{ href: `${baseUrl}/wp-json/wp/v2/pages/${page.id}` }],
       collection: [{ href: `${baseUrl}/wp-json/wp/v2/pages` }]
@@ -155,7 +164,7 @@ pages.post('/', authMiddleware, requireRole('administrator', 'editor'), async (c
     const settings = await getSiteSettings(c.env);
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
-    const { title, content, excerpt, slug, status, parent, comment_status } = await c.req.json();
+    const { title, content, excerpt, slug, status, parent, comment_status, menu_hidden, menu_priority } = await c.req.json();
 
     if (!title) {
       return c.json({ code: 'rest_missing_callback_param', message: 'Missing parameter: title' }, 400);
@@ -183,9 +192,9 @@ pages.post('/', authMiddleware, requireRole('administrator', 'editor'), async (c
     const result = await c.env.DB.prepare(`
       INSERT INTO posts (
         title, content, excerpt, slug, status, post_type, author_id,
-        parent_id, comment_status, created_at, updated_at, published_at
+        parent_id, comment_status, menu_hidden, menu_priority, created_at, updated_at, published_at
       )
-      VALUES (?, ?, ?, ?, ?, 'page', ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'page', ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       title,
       content || '',
@@ -195,6 +204,8 @@ pages.post('/', authMiddleware, requireRole('administrator', 'editor'), async (c
       user.userId,
       parent || 0,
       comment_status || 'open',
+      menu_hidden ? 1 : 0,
+      normalizeMenuPriority(menu_priority),
       now,
       now,
       publishedAt
@@ -211,6 +222,7 @@ pages.post('/', authMiddleware, requireRole('administrator', 'editor'), async (c
       return c.json({ code: 'rest_page_invalid', message: 'Failed to create page.' }, 500);
     }
 
+    await clearPublicSiteCommonCache(c.env, c.req.url);
     return c.json(formatPageResponse(newPage, baseUrl), 201);
   } catch (error: any) {
     console.error('[DEBUG] Failed to create page:', error);
@@ -226,7 +238,7 @@ pages.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async 
     const settings = await getSiteSettings(c.env);
     const baseUrl = settings.site_url || 'http://localhost:8787';
 
-    const { title, content, excerpt, slug, status, parent, comment_status } = await c.req.json();
+    const { title, content, excerpt, slug, status, parent, comment_status, menu_hidden, menu_priority } = await c.req.json();
 
     const existingPage = await c.env.DB.prepare(`
       SELECT * FROM posts WHERE id = ? AND post_type = 'page'
@@ -292,6 +304,16 @@ pages.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async 
       params.push(comment_status);
     }
 
+    if (menu_hidden !== undefined) {
+      updates.push('menu_hidden = ?');
+      params.push(menu_hidden ? 1 : 0);
+    }
+
+    if (menu_priority !== undefined) {
+      updates.push('menu_priority = ?');
+      params.push(normalizeMenuPriority(menu_priority));
+    }
+
     const updateQuery = `UPDATE posts SET ${updates.join(', ')} WHERE id = ?`;
     params.push(id);
 
@@ -308,6 +330,7 @@ pages.put('/:id', authMiddleware, requireRole('administrator', 'editor'), async 
       return c.json({ code: 'rest_page_invalid', message: 'Invalid page ID.' }, 404);
     }
 
+    await clearPublicSiteCommonCache(c.env, c.req.url);
     return c.json(formatPageResponse(updatedPage, baseUrl));
   } catch (error: any) {
     console.error('[DEBUG] Failed to update page:', error);
@@ -352,6 +375,7 @@ pages.post('/:id/restore', authMiddleware, requireRole('administrator', 'editor'
       WHERE p.id = ? AND p.post_type = 'page'
     `).bind(id).first<PageWithAuthorRow>();
 
+    await clearPublicSiteCommonCache(c.env, c.req.url);
     return c.json(formatPageResponse(restoredPage!, baseUrl));
   } catch (error: any) {
     return c.json({ code: 'rest_internal_error', message: error.message }, 500);
@@ -382,6 +406,7 @@ pages.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), asy
         DELETE FROM posts WHERE id = ?
       `).bind(id).run();
 
+      await clearPublicSiteCommonCache(c.env, c.req.url);
       return c.json({ deleted: true, previous: page });
     } else {
       await c.env.DB.prepare('DELETE FROM post_meta WHERE post_id = ? AND meta_key = ?')
@@ -404,6 +429,7 @@ pages.delete('/:id', authMiddleware, requireRole('administrator', 'editor'), asy
         return c.json({ code: 'rest_page_invalid', message: 'Invalid page ID.' }, 404);
       }
 
+      await clearPublicSiteCommonCache(c.env, c.req.url);
       return c.json({
         id: trashedPage.id,
         status: trashedPage.status

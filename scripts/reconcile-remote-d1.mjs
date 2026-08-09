@@ -274,6 +274,22 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0012_add_page_menu_fields.sql',
+    description: 'page menu visibility and priority columns in posts',
+    isSatisfied() {
+      return columnExists('posts', 'menu_hidden') && columnExists('posts', 'menu_priority');
+    },
+    reconcile() {
+      if (!columnExists('posts', 'menu_hidden')) {
+        executeSql('ALTER TABLE posts ADD COLUMN menu_hidden INTEGER NOT NULL DEFAULT 0;');
+      }
+
+      if (!columnExists('posts', 'menu_priority')) {
+        executeSql('ALTER TABLE posts ADD COLUMN menu_priority INTEGER NOT NULL DEFAULT 0;');
+      }
+    },
+  },
 ];
 
 function main() {

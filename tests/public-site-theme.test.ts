@@ -26,8 +26,8 @@ describe('public-site theme selection', () => {
     await clearPublicSiteSettingsCache(env, 'https://blog.example/wp-json/wp/v2/settings');
 
     expect(deletedKeys).toEqual([
-      'cfblog:v3:public:common:https://blog.example',
-      'cfblog:v3:public:site-meta:https://blog.example',
+      'cfblog:v4:public:common:https://blog.example',
+      'cfblog:v4:public:site-meta:https://blog.example',
     ]);
   });
 });
