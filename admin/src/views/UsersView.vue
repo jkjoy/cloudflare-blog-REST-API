@@ -247,7 +247,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           <NFormItem :label="t('users.email')" required><NInput v-model:value="form.email" :input-props="{ type: 'email', autocomplete: 'off' }" /></NFormItem>
           <NFormItem :label="t('users.displayName')"><NInput v-model:value="form.displayName" /></NFormItem>
           <NFormItem v-if="activeUser" :label="t('users.bio')"><NInput v-model:value="form.bio" type="textarea" :rows="4" /></NFormItem>
-          <NFormItem :label="activeUser ? t('users.newPassword') : t('users.password')" :required="!activeUser"><NInput v-model:value="form.password" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password', minlength: 12 }" /></NFormItem>
+          <NFormItem :label="activeUser ? t('users.newPassword') : t('users.password')" :feedback="t('users.passwordHint')" :required="!activeUser"><NInput v-model:value="form.password" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password', minlength: 12 }" /></NFormItem>
           <NFormItem v-if="!activeUser || (isAdministrator && activeUser.id !== auth.user?.id)" :label="t('users.role')"><NSelect v-model:value="form.role" :options="editorRoleOptions" /></NFormItem>
           <div class="user-drawer-actions"><NButton @click="editorOpen = false">{{ t('content.cancel') }}</NButton><NButton type="primary" attr-type="submit" :loading="saving" :disabled="!form.email.trim() || (!activeUser && (!form.username.trim() || form.password.length < 12))">{{ activeUser ? t('users.saveChanges') : t('users.create') }}</NButton></div>
         </NForm>

@@ -6,6 +6,13 @@ import type { AppEnv, Env } from '../types';
 import { getPublicCommentProtectionSettings } from '../comment-security';
 import { buildGravatarUrl, getSiteSettings, md5, normalizeBaseUrl } from '../utils';
 import { PUBLIC_SITE_CSS, PUBLIC_SITE_JS } from './assets';
+import {
+  buildPublicCacheKey,
+  PUBLIC_COMMON_CACHE_TTL_SECONDS,
+  PUBLIC_KV_CACHE_VERSION,
+  PUBLIC_RSS_CACHE_TTL_SECONDS,
+  PUBLIC_SITEMAP_CACHE_TTL_SECONDS,
+} from './cache';
 
 marked.use({
   async: false,
@@ -34,8 +41,19 @@ interface SiteMeta {
   logoUrl: string;
   noticeHtml: string;
   socialLinks: SocialLink[];
+  theme: SiteTheme;
+  themeColor: string;
   title: string;
 }
+
+type SiteTheme = 'classic' | 'editorial' | 'magazine' | 'minimal';
+
+const SITE_THEME_COLORS: Record<SiteTheme, string> = {
+  classic: '#01c4b6',
+  editorial: '#a33f32',
+  magazine: '#2457d6',
+  minimal: '#202326',
+};
 
 interface SocialLink {
   href: string;
@@ -259,11 +277,6 @@ const RESERVED_NAV_SLUGS = new Set([
 ]);
 
 const RSS_FEED_LIMIT = 50;
-const PUBLIC_KV_CACHE_VERSION = 'v1';
-const PUBLIC_COMMON_CACHE_TTL_SECONDS = 300;
-const PUBLIC_RSS_CACHE_TTL_SECONDS = 900;
-const PUBLIC_SITEMAP_CACHE_TTL_SECONDS = 3600;
-
 async function getKvJson<T>(
   env: Env,
   key: string,
@@ -282,20 +295,6 @@ async function getKvJson<T>(
   const value = await loader();
   await env.CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
   return value;
-}
-
-function getPublicCacheOrigin(requestUrl: string): string {
-  return normalizeBaseUrl(new URL(requestUrl).origin);
-}
-
-function buildPublicCacheKey(requestUrl: string, name: string, ...parts: unknown[]): string {
-  const suffix = parts
-    .map((part) =>
-      encodeURIComponent(typeof part === 'string' ? part : JSON.stringify(part)),
-    )
-    .join(':');
-  const baseKey = `cfblog:${PUBLIC_KV_CACHE_VERSION}:public:${name}:${getPublicCacheOrigin(requestUrl)}`;
-  return suffix ? `${baseKey}:${suffix}` : baseKey;
 }
 
 export function registerPublicSiteRoutes(app: AppRouter): void {
@@ -939,6 +938,7 @@ async function getSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
   const noticeHtml = renderNoticeHtml(String(rawSettings.site_notice || '').trim());
   const commentProtection = getPublicCommentProtectionSettings(rawSettings);
   const homePostsPerPage = parsePositiveIntSetting(rawSettings.home_posts_per_page, 15);
+  const theme = normalizeSiteTheme(rawSettings.site_theme);
 
   return {
     adminAvatarUrl,
@@ -960,8 +960,15 @@ async function getSiteMeta(env: Env, requestUrl: string): Promise<SiteMeta> {
     logoUrl,
     noticeHtml,
     socialLinks,
+    theme,
+    themeColor: SITE_THEME_COLORS[theme],
     title,
   };
+}
+
+export function normalizeSiteTheme(value: unknown): SiteTheme {
+  const theme = String(value || '').trim();
+  return theme === 'editorial' || theme === 'magazine' || theme === 'minimal' ? theme : 'classic';
 }
 
 async function getNavPages(env: Env): Promise<NavPage[]> {
@@ -1781,14 +1788,14 @@ function renderLayout(input: {
   const rssUrl = buildAbsoluteUrl(input.common.site.baseUrl, '/rss.xml');
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-site-theme="${input.common.site.theme}" data-site-page="${input.activePath === '/' ? 'home' : 'inner'}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${pageTitle}</title>
   <meta name="description" content="${metaDescription}">
   <meta name="keywords" content="${escapeAttribute(input.common.site.keywords)}">
-  <meta name="theme-color" content="#1f8a70">
+  <meta name="theme-color" content="${input.common.site.themeColor}">
   <meta property="og:type" content="website">
   <meta property="og:title" content="${escapeAttribute(input.title)}">
   <meta property="og:description" content="${metaDescription}">
@@ -1799,7 +1806,7 @@ function renderLayout(input: {
     `${input.common.site.title} RSS`,
   )}" href="${escapeAttribute(rssUrl)}">
   <link rel="stylesheet" href="/_cfblog/vh-theme.css">
-  <link rel="stylesheet" href="/_cfblog/style.css">
+  <link rel="stylesheet" href="/_cfblog/style.css?v=${PUBLIC_KV_CACHE_VERSION}">
   ${
     input.common.site.faviconUrl
       ? `<link rel="icon" href="${escapeAttribute(input.common.site.faviconUrl)}">`
@@ -1837,7 +1844,7 @@ function renderLayout(input: {
   ${renderFooter(input.common)}
   ${renderSearchDialog(input.common.recentPosts)}
   <script src="/assets/js/vhCaiqi.js" defer></script>
-  <script type="module" src="/_cfblog/app.js"></script>
+  <script type="module" src="/_cfblog/app.js?v=${PUBLIC_KV_CACHE_VERSION}"></script>
 </body>
 </html>`;
 }
@@ -1884,6 +1891,11 @@ function renderHero(input: {
   const headerAvatarUrl = input.common.site.logoUrl;
   return `
     <div class="header-main">
+      <div class="hero-copy">
+        <span class="hero-kicker">${escapeHtml(input.kicker)}</span>
+        <h1>${escapeHtml(input.title)}</h1>
+        <p>${escapeHtml(input.description)}</p>
+      </div>
       <div class="avatar">
         <img src="/assets/images/lazy-loading.webp" data-vh-lz-src="${escapeAttribute(
           headerAvatarUrl,

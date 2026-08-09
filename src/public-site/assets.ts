@@ -4,6 +4,582 @@ export const PUBLIC_SITE_CSS = String.raw`.vh-tools-main {
   gap: 1.25rem;
 }
 
+html[data-site-theme='classic'] {
+  --vh-main-color: #01c4b6;
+  --vh-font-color: #34495e;
+  --vh-white-color: #fff;
+  --vh-body-bg: #f8f8f8;
+  --vh-box-shadow: 0 3px 8px 6px rgba(7, 17, 27, 0.05);
+  --vh-main-radius: 0.88rem;
+  --cfblog-page-background: #fff url('/assets/images/bg.png');
+  --cfblog-page-background-opacity: 0.188;
+}
+
+html[data-site-theme='minimal'] {
+  --vh-main-color: #202326;
+  --vh-font-color: #202326;
+  --vh-white-color: #fff;
+  --vh-body-bg: #fff;
+  --vh-box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 5px rgba(0, 0, 0, 0.04);
+  --vh-main-radius: 0.35rem;
+  --vh-main-max-width: 1080px;
+  --cfblog-page-background: #fff;
+  --cfblog-page-background-opacity: 1;
+}
+
+html[data-site-theme='editorial'] {
+  --vh-main-color: #a33f32;
+  --vh-font-color: #2d2926;
+  --vh-white-color: #fff;
+  --vh-body-bg: #f4f1ec;
+  --vh-box-shadow: 0 0 0 1px rgba(45, 41, 38, 0.07), 0 3px 9px rgba(45, 41, 38, 0.05);
+  --vh-main-radius: 0.25rem;
+  --vh-aside-width: 286px;
+  --vh-main-max-width: 1360px;
+  --cfblog-page-background: #f4f1ec;
+  --cfblog-page-background-opacity: 1;
+}
+
+html[data-site-theme='magazine'] {
+  --vh-main-color: #2457d6;
+  --vh-font-color: #172033;
+  --vh-white-color: #fff;
+  --vh-body-bg: #eef1f5;
+  --vh-box-shadow: 0 0 0 1px rgba(23, 32, 51, 0.08), 0 4px 12px rgba(23, 32, 51, 0.06);
+  --vh-main-radius: 0.3rem;
+  --vh-main-max-width: 1540px;
+  --cfblog-page-background: #eef1f5;
+  --cfblog-page-background-opacity: 1;
+}
+
+html[data-site-theme] {
+  background-color: var(--vh-body-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-site-theme] > body::before {
+  background: var(--cfblog-page-background);
+  opacity: var(--cfblog-page-background-opacity);
+}
+
+.header-main > .hero-copy {
+  display: none;
+}
+
+html[data-site-theme] .article-list-main .vh-article-banner > img,
+html[data-site-theme] article.vh-article-main > main img {
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
+html[data-site-theme] .article-list-main h1,
+html[data-site-theme] .article-list-main h2,
+html[data-site-theme] .header-main .hero-copy h1,
+html[data-site-theme] article.vh-article-main > header > h1 {
+  text-wrap: balance;
+}
+
+html[data-site-theme] .article-list-main .vh-article-excerpt,
+html[data-site-theme] .header-main .hero-copy p {
+  text-wrap: pretty;
+}
+
+html[data-site-theme] aside.vh-aside .vh-aside-info span,
+html[data-site-theme] aside.vh-aside i,
+html[data-site-theme] aside.vh-aside em,
+html[data-site-theme] aside.vh-aside time,
+html[data-site-theme] article.vh-article-main .article-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Minimal Reading: a quiet one-column, text-first layout. */
+html[data-site-theme='minimal'] header.vh-header {
+  height: 58px;
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+html[data-site-theme='minimal'] .header-main {
+  height: 20rem;
+  padding: 5rem 1.25rem 2rem;
+  align-items: stretch;
+  background: #fff;
+}
+
+html[data-site-theme='minimal'][data-site-page='inner'] .header-main {
+  height: 13rem;
+}
+
+html[data-site-theme='minimal'] .header-main::before,
+html[data-site-theme='minimal'] .header-main > .avatar,
+html[data-site-theme='minimal'] .header-main > .auther,
+html[data-site-theme='minimal'] .header-main > .desc {
+  display: none;
+}
+
+html[data-site-theme='minimal'] .header-main > .hero-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+
+html[data-site-theme='minimal'] .hero-copy .hero-kicker {
+  margin-bottom: 0.75rem;
+  color: var(--vh-main-color);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-site-theme='minimal'] .hero-copy h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: 3rem;
+  font-weight: 650;
+  line-height: 1.12;
+}
+
+html[data-site-theme='minimal'] .hero-copy p {
+  margin-top: 1rem;
+  max-width: 620px;
+  color: var(--vh-font-66);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+html[data-site-theme='minimal'] main.main > .main-inner {
+  max-width: 980px;
+}
+
+html[data-site-theme='minimal'] main.main > .main-inner > .main-inner-content {
+  padding: 1rem 1.25rem 3rem;
+}
+
+html[data-site-theme='minimal'] aside.vh-aside {
+  display: none;
+}
+
+html[data-site-theme='minimal'] .article-list-main {
+  padding-bottom: 5rem;
+}
+
+html[data-site-theme='minimal'] .article-list-main > section.article-list {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+html[data-site-theme='minimal'] .article-list-main > section.article-list > .vh-article-item {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 0 2rem;
+  min-height: 13rem;
+  padding: 1.5rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-banner {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  height: 11rem;
+  align-self: center;
+  border-radius: 0.35rem;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > header,
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-excerpt,
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-taglist {
+  grid-column: 2;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > header {
+  padding-top: 0.25rem;
+  padding-bottom: 0.6rem;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > header .title > a {
+  font-size: 1.45rem;
+  line-height: 1.32;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-excerpt {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  letter-spacing: 0;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-taglist {
+  align-self: end;
+  padding-bottom: 0.25rem;
+}
+
+html[data-site-theme='minimal'] .article-list-main .vh-article-item:hover .vh-article-banner > img {
+  transform: scale(1.02);
+}
+
+html[data-site-theme='minimal'] .vh-page > .vh-page-header,
+html[data-site-theme='minimal'] .vh-tools-main > .vh-page-header,
+html[data-site-theme='minimal'] article.vh-article-main > header,
+html[data-site-theme='minimal'] article.vh-article-main > main {
+  box-shadow: none;
+  background: transparent;
+}
+
+html[data-site-theme='minimal'] article.vh-article-main > header,
+html[data-site-theme='minimal'] article.vh-article-main > main {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+/* Editorial Desk: serif-led stories with a right information rail. */
+html[data-site-theme='editorial'] header.vh-header {
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 1px 0 rgba(45, 41, 38, 0.12);
+}
+
+html[data-site-theme='editorial'] .header-main {
+  height: 25rem;
+  align-items: stretch;
+}
+
+html[data-site-theme='editorial'][data-site-page='inner'] .header-main {
+  height: 17rem;
+}
+
+html[data-site-theme='editorial'] .header-main::before {
+  background: linear-gradient(90deg, rgba(28, 20, 17, 0.82), rgba(28, 20, 17, 0.18)), var(--vh-home-banner);
+}
+
+html[data-site-theme='editorial'] .header-main > .avatar,
+html[data-site-theme='editorial'] .header-main > .auther,
+html[data-site-theme='editorial'] .header-main > .desc {
+  display: none;
+}
+
+html[data-site-theme='editorial'] .header-main > .hero-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: min(calc(100% - 3rem), 1320px);
+  margin: 0 auto;
+  padding-bottom: 3.5rem;
+  color: #fff;
+}
+
+html[data-site-theme='editorial'] .hero-copy .hero-kicker {
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-site-theme='editorial'] .hero-copy h1 {
+  max-width: 760px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 3.2rem;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+html[data-site-theme='editorial'] .hero-copy p {
+  margin-top: 1rem;
+  max-width: 620px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+html[data-site-theme='editorial'] main.main > .main-inner {
+  flex-direction: row;
+}
+
+html[data-site-theme='editorial'] .article-list-main > section.article-list {
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+html[data-site-theme='editorial'] .article-list-main > section.article-list > .vh-article-item {
+  display: grid;
+  grid-template-columns: minmax(15rem, 38%) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 0 1.5rem;
+  min-height: 15rem;
+  border: 0;
+  border-radius: 0.25rem;
+  box-shadow: var(--vh-box-shadow);
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-banner {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  height: 100%;
+  min-height: 15rem;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > header,
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > .vh-article-excerpt,
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > .vh-article-taglist {
+  grid-column: 2;
+  padding-right: 1.5rem;
+  padding-left: 0;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > header {
+  padding-top: 1.5rem;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > header .title > a,
+html[data-site-theme='editorial'] article.vh-article-main > header > h1,
+html[data-site-theme='editorial'] .vh-page-header h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > header .title > a {
+  font-size: 1.55rem;
+  line-height: 1.2;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item > .vh-article-excerpt {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  letter-spacing: 0;
+}
+
+html[data-site-theme='editorial'] .article-list-main .vh-article-item:hover .vh-article-banner > img {
+  transform: scale(1.03);
+}
+
+html[data-site-theme='editorial'] article.vh-article-main > main {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.02rem;
+  line-height: 1.95;
+}
+
+/* Magazine Grid: wide asymmetric cards and a compact masthead. */
+html[data-site-theme='magazine'] header.vh-header {
+  background-color: rgba(16, 24, 40, 0.94);
+  backdrop-filter: blur(12px);
+  box-shadow: none;
+}
+
+html[data-site-theme='magazine'] header.vh-header .home,
+html[data-site-theme='magazine'] header.vh-header .nav-link {
+  color: #fff;
+}
+
+html[data-site-theme='magazine'] .header-main {
+  height: 21rem;
+  align-items: stretch;
+}
+
+html[data-site-theme='magazine'][data-site-page='inner'] .header-main {
+  height: 14rem;
+}
+
+html[data-site-theme='magazine'] .header-main::before {
+  background: linear-gradient(90deg, rgba(10, 17, 32, 0.88), rgba(10, 17, 32, 0.35)), var(--vh-home-banner);
+}
+
+html[data-site-theme='magazine'] .header-main > .avatar,
+html[data-site-theme='magazine'] .header-main > .auther,
+html[data-site-theme='magazine'] .header-main > .desc {
+  display: none;
+}
+
+html[data-site-theme='magazine'] .header-main > .hero-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: min(calc(100% - 3rem), 1490px);
+  margin: 0 auto;
+  padding-bottom: 2.25rem;
+  color: #fff;
+}
+
+html[data-site-theme='magazine'] .hero-copy .hero-kicker {
+  width: max-content;
+  margin-bottom: 0.65rem;
+  padding: 0.22rem 0.5rem;
+  background: var(--vh-main-color);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+html[data-site-theme='magazine'] .hero-copy h1 {
+  max-width: 900px;
+  font-size: 2.75rem;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+html[data-site-theme='magazine'] .hero-copy p {
+  margin-top: 0.75rem;
+  max-width: 700px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.9rem;
+}
+
+html[data-site-theme='magazine'] main.main > .main-inner > .main-inner-content {
+  padding: 1rem 0.75rem 3rem;
+}
+
+html[data-site-theme='magazine'] aside.vh-aside {
+  display: none;
+}
+
+html[data-site-theme='magazine'] .article-list-main > section.article-list {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 1rem;
+}
+
+html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item {
+  grid-column: span 4;
+  border: 0;
+  border-radius: 0.3rem;
+  box-shadow: var(--vh-box-shadow);
+}
+
+html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:first-child {
+  grid-column: span 8;
+}
+
+html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:nth-child(2) {
+  grid-column: span 4;
+}
+
+html[data-site-theme='magazine'] .article-list-main .vh-article-banner {
+  height: 11rem;
+}
+
+html[data-site-theme='magazine'] .article-list-main .vh-article-item:first-child > .vh-article-banner,
+html[data-site-theme='magazine'] .article-list-main .vh-article-item:nth-child(2) > .vh-article-banner {
+  height: 20rem;
+}
+
+html[data-site-theme='magazine'] .article-list-main .vh-article-item:first-child > header .title > a {
+  font-size: 1.55rem;
+}
+
+html[data-site-theme='magazine'] .article-list-main .vh-article-item > header .title > a {
+  font-weight: 750;
+}
+
+html[data-site-theme='magazine'] .article-list-main .vh-article-item > .vh-article-excerpt {
+  letter-spacing: 0;
+}
+
+html[data-site-theme='magazine'] article.vh-article-main,
+html[data-site-theme='magazine'] .vh-page,
+html[data-site-theme='magazine'] .vh-tools-main {
+  max-width: 1080px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+@media screen and (max-width: 1080px) {
+  html[data-site-theme='editorial'] aside.vh-aside {
+    display: none;
+  }
+
+  html[data-site-theme='editorial'] main.main > .main-inner {
+    max-width: 980px;
+  }
+
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item,
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:nth-child(2) {
+    grid-column: span 6;
+  }
+
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  html[data-site-theme='minimal'] .header-main,
+  html[data-site-theme='editorial'] .header-main,
+  html[data-site-theme='magazine'] .header-main {
+    height: 17rem;
+  }
+
+  html[data-site-theme='minimal'][data-site-page='inner'] .header-main,
+  html[data-site-theme='editorial'][data-site-page='inner'] .header-main,
+  html[data-site-theme='magazine'][data-site-page='inner'] .header-main {
+    height: 12rem;
+  }
+
+  html[data-site-theme='minimal'] .hero-copy h1,
+  html[data-site-theme='editorial'] .hero-copy h1,
+  html[data-site-theme='magazine'] .hero-copy h1 {
+    font-size: 2rem;
+  }
+
+  html[data-site-theme='editorial'] .header-main > .hero-copy,
+  html[data-site-theme='magazine'] .header-main > .hero-copy {
+    width: calc(100% - 2rem);
+    padding-bottom: 1.75rem;
+  }
+
+  html[data-site-theme='minimal'] .article-list-main > section.article-list > .vh-article-item,
+  html[data-site-theme='editorial'] .article-list-main > section.article-list > .vh-article-item {
+    display: flex;
+    min-height: 0;
+    padding: 1rem 0;
+  }
+
+  html[data-site-theme='editorial'] .article-list-main > section.article-list > .vh-article-item {
+    padding: 0;
+  }
+
+  html[data-site-theme='minimal'] .article-list-main .vh-article-banner,
+  html[data-site-theme='editorial'] .article-list-main .vh-article-banner {
+    width: 100%;
+    height: 12rem;
+    min-height: 0;
+  }
+
+  html[data-site-theme='minimal'] .article-list-main .vh-article-item > header,
+  html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-excerpt,
+  html[data-site-theme='minimal'] .article-list-main .vh-article-item > .vh-article-taglist,
+  html[data-site-theme='editorial'] .article-list-main .vh-article-item > header,
+  html[data-site-theme='editorial'] .article-list-main .vh-article-item > .vh-article-excerpt,
+  html[data-site-theme='editorial'] .article-list-main .vh-article-item > .vh-article-taglist {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  html[data-site-theme='minimal'] .article-list-main .vh-article-item > header {
+    padding-top: 1rem;
+  }
+
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item,
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:first-child,
+  html[data-site-theme='magazine'] .article-list-main > section.article-list > .vh-article-item:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  html[data-site-theme='magazine'] .article-list-main .vh-article-item:first-child > .vh-article-banner,
+  html[data-site-theme='magazine'] .article-list-main .vh-article-item:nth-child(2) > .vh-article-banner {
+    height: 14rem;
+  }
+}
+
 .article-list-main > section.article-list > .vh-article-item > header > h3 > .vh-article-cat::before {
   content: none !important;
 }

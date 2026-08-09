@@ -263,6 +263,17 @@ const migrationPlan = [
       executeFile(`migrations/${this.id}`);
     },
   },
+  {
+    id: '0011_add_site_theme_setting.sql',
+    description: 'selectable public-site theme in site_settings',
+    isSatisfied() {
+      return siteSettingsExist(['site_theme']);
+    },
+    reconcile() {
+      console.log(`Applying compatibility migration ${this.id}...`);
+      executeFile(`migrations/${this.id}`);
+    },
+  },
 ];
 
 function main() {

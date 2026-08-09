@@ -40,6 +40,7 @@ describe('security-sensitive routes', () => {
             return {
               results: [
                 { setting_key: 'site_title', setting_value: 'CFBlog' },
+                { setting_key: 'site_theme', setting_value: 'editorial' },
                 { setting_key: 'resend_api_key', setting_value: 'resend-secret' },
                 { setting_key: 'comment_turnstile_secret_key', setting_value: 'turnstile-secret' },
                 { setting_key: 'webhook_secret', setting_value: 'webhook-secret' }
@@ -66,6 +67,11 @@ describe('security-sensitive routes', () => {
     expect(JSON.stringify(body)).not.toContain('resend-secret');
     expect(JSON.stringify(body)).not.toContain('turnstile-secret');
     expect(JSON.stringify(body)).not.toContain('webhook-secret');
+
+    const publicResponse = await routeApp.request('/settings', {}, env);
+    const publicBody = await publicResponse.json() as Record<string, string>;
+    expect(publicBody.site_theme).toBe('editorial');
+    expect(JSON.stringify(publicBody)).not.toContain('resend-secret');
   });
 
   it('adds admin security headers and rejects foreign CORS origins', async () => {
