@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../types'
 import { clearSettingsCache, normalizeGravatarBaseUrl } from '../utils'
 import { authMiddleware, requireRole } from '../auth'
+import { clearPublicSiteSettingsCache } from '../public-site/cache'
 
 const settings = new Hono<AppEnv>()
 const SENSITIVE_SETTING_KEYS = new Set([
@@ -15,6 +16,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'site_description',
   'site_keywords',
   'site_author',
+  'site_theme',
   'gravatar_base_url',
   'home_posts_per_page',
   'comment_turnstile_enabled',
@@ -140,6 +142,7 @@ settings.put('/', authMiddleware, requireRole('administrator'), async (c) => {
 
     // Clear settings cache
     clearSettingsCache()
+    await clearPublicSiteSettingsCache(c.env, c.req.url)
 
     return c.json({
       success: true,
@@ -174,6 +177,7 @@ settings.put('/:key', authMiddleware, requireRole('administrator'), async (c) =>
 
     // Clear settings cache
     clearSettingsCache()
+    await clearPublicSiteSettingsCache(c.env, c.req.url)
 
     return c.json({
       success: true,

@@ -8,6 +8,7 @@
 - `0006_add_gravatar_base_url.sql` - 为站点设置增加可配置的 Gravatar 镜像地址
 - `0007_normalize_media_urls.sql` - 将媒体地址转换为不含域名的相对路径
 - `0008_add_resend_api_key_setting.sql` - 在受保护的站点设置中保存 Resend API Key
+- `0011_add_site_theme_setting.sql` - 为博客前台增加可切换的内置主题设置
 
 ## 如何应用迁移
 

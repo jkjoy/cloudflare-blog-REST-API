@@ -61,6 +61,7 @@ export async function getSiteSettings(env: Env): Promise<Record<string, any>> {
     const settings: Record<string, any> = {
       site_title: 'CFBlog',
       site_description: '基于 Cloudflare Workers + D1 + R2 构建的现代化博客系统',
+      site_theme: 'classic',
       site_url: 'http://localhost:8787',
       admin_email: 'admin@example.com',
       gravatar_base_url: DEFAULT_GRAVATAR_BASE_URL,
@@ -100,6 +101,7 @@ export async function getSiteSettings(env: Env): Promise<Record<string, any>> {
     return {
       site_title: 'CFBlog',
       site_description: '基于 Cloudflare Workers + D1 + R2 构建的现代化博客系统',
+      site_theme: 'classic',
       site_url: 'http://localhost:8787',
       admin_email: 'admin@example.com',
       gravatar_base_url: DEFAULT_GRAVATAR_BASE_URL,

@@ -2319,6 +2319,34 @@ a {
 .settings-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
 .settings-span-2 { grid-column: 1 / -1; }
 .settings-form-grid .n-input-number { width: 100%; }
+.settings-theme-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; }
+.settings-theme-option.n-radio { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 96px; align-items: center; gap: 12px; margin: 0; padding: 14px 16px; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 5px rgba(0, 0, 0, 0.04); cursor: pointer; transition-property: box-shadow, background-color, transform; transition-duration: 160ms; transition-timing-function: ease-out; }
+.settings-theme-option.n-radio:hover { box-shadow: 0 0 0 1px rgba(0, 122, 204, 0.28), 0 4px 10px rgba(0, 0, 0, 0.06); }
+.settings-theme-option.n-radio:active { transform: scale(0.96); }
+.settings-theme-option.n-radio.n-radio--checked { background: #f5faff; box-shadow: 0 0 0 2px var(--admin-blue), 0 4px 10px rgba(0, 80, 140, 0.08); }
+.settings-theme-option .n-radio__label { display: grid; grid-template-columns: minmax(0, 1fr) 112px; align-items: center; gap: 12px; width: 100%; }
+.settings-theme-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.settings-theme-copy strong { font-size: 12px; }
+.settings-theme-copy small { color: var(--admin-muted); font-size: 10px; line-height: 1.5; text-wrap: pretty; }
+.settings-theme-preview { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 7px 16px repeat(2, 10px); gap: 3px; width: 112px; height: 54px; padding: 5px; border-radius: 4px; background: #f2f4f6; outline: 1px solid rgba(0, 0, 0, 0.1); outline-offset: -1px; overflow: hidden; }
+.settings-theme-preview i { display: block; min-width: 0; border-radius: 1px; background: #c8ced5; }
+.settings-theme-preview .theme-preview-nav { grid-column: 1 / -1; background: #687583; }
+.settings-theme-preview .theme-preview-hero { grid-column: 1 / -1; background: #9ba6b1; }
+.settings-theme-preview .theme-preview-aside { grid-column: 1; grid-row: 3 / 5; background: #b5bdc5; }
+.settings-theme-preview .theme-preview-story { grid-column: 2 / -1; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05); }
+.settings-theme-preview[data-theme-preview='minimal'] { grid-template-columns: 1fr; grid-template-rows: 7px 11px repeat(3, 7px); background: #fff; }
+.settings-theme-preview[data-theme-preview='minimal'] .theme-preview-hero { grid-column: 1; }
+.settings-theme-preview[data-theme-preview='minimal'] .theme-preview-aside { display: none; }
+.settings-theme-preview[data-theme-preview='minimal'] .theme-preview-story { grid-column: 1; }
+.settings-theme-preview[data-theme-preview='editorial'] { grid-template-columns: repeat(4, 1fr); }
+.settings-theme-preview[data-theme-preview='editorial'] .theme-preview-aside { grid-column: 4; }
+.settings-theme-preview[data-theme-preview='editorial'] .theme-preview-story { grid-column: 1 / 4; }
+.settings-theme-preview[data-theme-preview='magazine'] { grid-template-columns: repeat(6, 1fr); grid-template-rows: 7px 12px repeat(2, 12px); }
+.settings-theme-preview[data-theme-preview='magazine'] .theme-preview-aside { display: none; }
+.settings-theme-preview[data-theme-preview='magazine'] .theme-preview-story { grid-column: span 2; }
+.settings-theme-preview[data-theme-preview='magazine'] .story-one { grid-column: span 4; grid-row: 3 / 5; }
+.settings-theme-preview[data-theme-preview='magazine'] .story-two,
+.settings-theme-preview[data-theme-preview='magazine'] .story-three { grid-column: span 2; }
 .settings-code-field textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 .settings-switch-list { border-top: 1px solid #e7eaee; }
 .settings-switch-row { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e7eaee; cursor: pointer; }
@@ -2779,8 +2807,17 @@ a {
   }
 
   .settings-form-grid,
-  .settings-checkbox-grid {
+  .settings-checkbox-grid,
+  .settings-theme-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-theme-option .n-radio__label {
+    grid-template-columns: minmax(0, 1fr) 104px;
+  }
+
+  .settings-theme-preview {
+    width: 104px;
   }
 
   .settings-span-2 {

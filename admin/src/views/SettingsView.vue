@@ -9,6 +9,8 @@ import {
   NIcon,
   NInput,
   NInputNumber,
+  NRadio,
+  NRadioGroup,
   NSelect,
   NSpin,
   NSwitch,
@@ -32,7 +34,7 @@ const activeTab = ref('general');
 
 const form = reactive({
   siteTitle: '', siteUrl: '', adminEmail: '', gravatarBaseUrl: 'https://cn.cravatar.com/avatar', siteDescription: '',
-  homePostsPerPage: 15, siteKeywords: '', siteAuthor: '', siteFavicon: '', siteLogo: '', siteNotice: '', siteIcp: '', siteFooterText: '', headHtml: '',
+  homePostsPerPage: 15, siteKeywords: '', siteAuthor: '', siteTheme: 'classic', siteFavicon: '', siteLogo: '', siteNotice: '', siteIcp: '', siteFooterText: '', headHtml: '',
   mailFromName: '', mailFromEmail: '', resendApiKey: '', resendApiKeyConfigured: false, mailNotificationsEnabled: false, notifyAdminOnComment: true, notifyCommenterOnReply: true,
   commentTurnstileEnabled: false, commentTurnstileSiteKey: '', commentTurnstileSecretKey: '', commentTurnstileSecretKeyConfigured: false, commentModerationFirstComment: true,
   commentRateLimitSeconds: 30, commentMaxLinks: 2, commentSpamKeywords: '',
@@ -55,6 +57,12 @@ const tabOptions = computed(() => [
   { label: t('settings.commentsTab'), value: 'comments' },
   { label: t('settings.integrationsTab'), value: 'integrations' },
 ]);
+const themeOptions = computed(() => [
+  { value: 'classic', label: t('settings.themeClassic'), description: t('settings.themeClassicDescription') },
+  { value: 'minimal', label: t('settings.themeMinimal'), description: t('settings.themeMinimalDescription') },
+  { value: 'editorial', label: t('settings.themeEditorial'), description: t('settings.themeEditorialDescription') },
+  { value: 'magazine', label: t('settings.themeMagazine'), description: t('settings.themeMagazineDescription') },
+]);
 const webhookOptions = [
   ['post.created', 'settings.webhookPostCreated'], ['post.updated', 'settings.webhookPostUpdated'],
   ['post.published', 'settings.webhookPostPublished'], ['post.deleted', 'settings.webhookPostDeleted'],
@@ -70,7 +78,7 @@ function applySettings(data: Record<string, string>) {
   Object.assign(form, {
     siteTitle: data.site_title || '', siteUrl: data.site_url || '', adminEmail: data.admin_email || '',
     gravatarBaseUrl: data.gravatar_base_url || 'https://cn.cravatar.com/avatar', siteDescription: data.site_description || '',
-    homePostsPerPage: Number(data.home_posts_per_page) || 15, siteKeywords: data.site_keywords || '', siteAuthor: data.site_author || '',
+    homePostsPerPage: Number(data.home_posts_per_page) || 15, siteKeywords: data.site_keywords || '', siteAuthor: data.site_author || '', siteTheme: data.site_theme || 'classic',
     siteFavicon: data.site_favicon || '', siteLogo: data.site_logo || '', siteNotice: data.site_notice || '', siteIcp: data.site_icp || '',
     siteFooterText: data.site_footer_text || '', headHtml: data.head_html || '', mailFromName: data.mail_from_name || data.site_title || '',
     mailFromEmail: data.mail_from_email || '', resendApiKey: '', resendApiKeyConfigured: enabled(data.resend_api_key_configured, false),
@@ -107,7 +115,7 @@ async function saveSettings() {
   const payload: Record<string, string> = {
     site_title: form.siteTitle.trim(), site_url: form.siteUrl.trim(), admin_email: form.adminEmail.trim(), gravatar_base_url: form.gravatarBaseUrl.trim(),
     site_description: form.siteDescription, home_posts_per_page: String(form.homePostsPerPage || 15), site_keywords: form.siteKeywords,
-    site_author: form.siteAuthor, site_favicon: form.siteFavicon.trim(), site_logo: form.siteLogo.trim(), site_notice: form.siteNotice,
+    site_author: form.siteAuthor, site_theme: form.siteTheme, site_favicon: form.siteFavicon.trim(), site_logo: form.siteLogo.trim(), site_notice: form.siteNotice,
     site_icp: form.siteIcp, site_footer_text: form.siteFooterText, head_html: form.headHtml,
     mail_from_name: form.mailFromName, mail_from_email: form.mailFromEmail.trim(), mail_notifications_enabled: form.mailNotificationsEnabled ? '1' : '0',
     notify_admin_on_comment: form.notifyAdminOnComment ? '1' : '0', notify_commenter_on_reply: form.notifyCommenterOnReply ? '1' : '0',
@@ -176,6 +184,18 @@ loadSettings();
           </NTabPane>
 
           <NTabPane name="appearance" :tab="t('settings.appearanceTab')">
+            <section class="settings-section"><h2>{{ t('settings.themeSection') }}</h2>
+              <NFormItem :label="t('settings.siteTheme')" :feedback="t('settings.siteThemeHint')">
+                <NRadioGroup v-model:value="form.siteTheme" name="site-theme" class="settings-theme-grid">
+                  <NRadio v-for="option in themeOptions" :key="option.value" :value="option.value" class="settings-theme-option">
+                    <span class="settings-theme-copy"><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+                    <span class="settings-theme-preview" :data-theme-preview="option.value" aria-hidden="true">
+                      <i class="theme-preview-nav" /><i class="theme-preview-hero" /><i class="theme-preview-story story-one" /><i class="theme-preview-story story-two" /><i class="theme-preview-story story-three" /><i class="theme-preview-aside" />
+                    </span>
+                  </NRadio>
+                </NRadioGroup>
+              </NFormItem>
+            </section>
             <section class="settings-section"><h2>{{ t('settings.brandSection') }}</h2><div class="settings-form-grid">
               <NFormItem :label="t('settings.siteFavicon')"><NInput v-model:value="form.siteFavicon" placeholder="https://example.com/favicon.ico" :input-props="{ type: 'url' }" /></NFormItem>
               <NFormItem :label="t('settings.siteLogo')"><NInput v-model:value="form.siteLogo" placeholder="https://example.com/logo.png" :input-props="{ type: 'url' }" /></NFormItem>
