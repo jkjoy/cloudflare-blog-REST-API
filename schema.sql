@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS posts (
     comment_count INTEGER DEFAULT 0,
     view_count INTEGER DEFAULT 0,
     sticky INTEGER DEFAULT 0,
+    menu_hidden INTEGER NOT NULL DEFAULT 0,
+    menu_priority INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     published_at TEXT,

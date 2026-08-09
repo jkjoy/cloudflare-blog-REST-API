@@ -64,6 +64,8 @@ export interface Post {
   comment_count: number;
   view_count: number;
   sticky: number;
+  menu_hidden: number;
+  menu_priority: number;
   created_at: string;
   updated_at: string;
   published_at: string | null;

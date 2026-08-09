@@ -10,6 +10,7 @@ import {
   NFormItem,
   NIcon,
   NInput,
+  NInputNumber,
   NSelect,
   NSpin,
   NSwitch,
@@ -47,6 +48,8 @@ interface EditorContent {
   categories?: number[];
   tags?: number[];
   parent?: number;
+  menu_hidden?: boolean;
+  menu_priority?: number;
 }
 
 interface MediaItem {
@@ -96,6 +99,8 @@ const form = reactive({
   tags: [] as number[],
   featuredImageUrl: '',
   parent: 0,
+  menuHidden: false,
+  menuPriority: 0,
 });
 
 const isPost = computed(() => props.kind === 'posts');
@@ -142,6 +147,7 @@ function resetForm() {
   Object.assign(form, {
     title: '', slug: '', content: '', excerpt: '', status: 'draft', commentStatus: 'open',
     sticky: false, publishDate: null, categories: [], tags: [], featuredImageUrl: '', parent: 0,
+    menuHidden: false, menuPriority: 0,
   });
 }
 
@@ -159,6 +165,8 @@ function applyContent(data: EditorContent) {
     tags: data.tags || [],
     featuredImageUrl: data.featured_image_url || '',
     parent: data.parent || 0,
+    menuHidden: Boolean(data.menu_hidden),
+    menuPriority: Number(data.menu_priority || 0),
   });
 }
 
@@ -234,6 +242,8 @@ async function saveContent() {
     } else {
       payload.parent = form.parent;
       payload.comment_status = form.commentStatus;
+      payload.menu_hidden = form.menuHidden;
+      payload.menu_priority = form.menuPriority;
     }
 
     const response = await apiFetch(contentId.value ? `/${props.kind}/${contentId.value}` : `/${props.kind}`, {
@@ -399,6 +409,20 @@ onBeforeRouteLeave(() => {
                 </div>
                 <NSwitch v-model:value="form.sticky" />
               </div>
+            </section>
+
+            <section v-if="!isPost" class="editor-sidebar-section">
+              <h2>{{ t('editor.menuSettings') }}</h2>
+              <div class="editor-switch-row">
+                <div>
+                  <strong>{{ t('editor.hideFromMenu') }}</strong>
+                  <small>{{ form.menuHidden ? t('editor.menuHidden') : t('editor.menuVisible') }}</small>
+                </div>
+                <NSwitch v-model:value="form.menuHidden" />
+              </div>
+              <NFormItem :label="t('editor.menuPriority')" :feedback="t('editor.menuPriorityHint')">
+                <NInputNumber v-model:value="form.menuPriority" :min="0" :max="9999" :step="1" />
+              </NFormItem>
             </section>
 
             <section v-if="isPost" class="editor-sidebar-section">

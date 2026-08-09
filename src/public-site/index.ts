@@ -971,14 +971,16 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
   return theme === 'editorial' || theme === 'magazine' || theme === 'minimal' ? theme : 'classic';
 }
 
-async function getNavPages(env: Env): Promise<NavPage[]> {
+export async function getNavPages(env: Env): Promise<NavPage[]> {
   const result = await env.DB.prepare(`
     SELECT title, slug
     FROM posts
     WHERE post_type = 'page'
       AND status = 'publish'
-    ORDER BY COALESCE(published_at, created_at) DESC
-    LIMIT 4
+      AND COALESCE(menu_hidden, 0) = 0
+    ORDER BY COALESCE(menu_priority, 0) DESC,
+      COALESCE(published_at, created_at) DESC,
+      id DESC
   `).all<{ title: string; slug: string }>();
 
   return (result.results || [])
