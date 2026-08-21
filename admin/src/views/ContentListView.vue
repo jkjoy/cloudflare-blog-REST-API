@@ -227,7 +227,16 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           <div class="content-title-cell">
             <component :is="isPosts ? FileText : Files" :size="18" stroke-width="1.8" />
             <div>
-              <strong>{{ item.title.rendered || t('content.untitled') }}</strong>
+              <a
+                v-if="isPosts && item.status === 'publish'"
+                class="content-title-link"
+                :href="`/${encodeURIComponent(item.slug)}`"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <strong>{{ item.title.rendered || t('content.untitled') }}</strong>
+              </a>
+              <strong v-else>{{ item.title.rendered || t('content.untitled') }}</strong>
               <small>/{{ item.slug }}</small>
             </div>
           </div>

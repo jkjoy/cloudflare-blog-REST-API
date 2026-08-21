@@ -631,6 +631,23 @@ a {
   white-space: nowrap;
 }
 
+.content-title-link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-title-link:hover strong {
+  color: var(--admin-blue);
+}
+
+.content-title-link:focus-visible {
+  outline: 2px solid rgba(34, 113, 177, 0.32);
+  outline-offset: 2px;
+}
+
 .content-title-cell small {
   margin-top: 3px;
   overflow: hidden;
@@ -1114,6 +1131,99 @@ a {
 
 .taxonomy-row:hover {
   background: #fbfcfd;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--admin-shadow-border);
+}
+
+.tag-cloud-item {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 44px;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f8f9fa;
+  box-shadow: 0 0 0 1px rgba(31, 41, 51, 0.08);
+  transition-property: background-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+.tag-cloud-item:hover {
+  background: #f4f8fb;
+  box-shadow: 0 0 0 1px rgba(34, 113, 177, 0.28), 0 2px 5px rgba(31, 41, 51, 0.06);
+}
+
+.tag-cloud-edit {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 7px 12px;
+  border: 0;
+  background: transparent;
+  color: #1f2933;
+  cursor: pointer;
+  text-align: left;
+  transition-property: transform;
+  transition-duration: 120ms;
+}
+
+.tag-cloud-edit > svg {
+  flex: 0 0 auto;
+  color: var(--admin-blue);
+}
+
+.tag-cloud-edit strong {
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.tag-cloud-edit:focus-visible {
+  outline: 2px solid var(--admin-blue);
+  outline-offset: -2px;
+}
+
+.tag-cloud-edit:active {
+  transform: scale(0.96);
+}
+
+.tag-cloud-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(34, 113, 177, 0.1);
+  color: #135e96;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.tag-cloud-delete.n-button {
+  width: 40px;
+  min-width: 40px;
+  height: auto;
+  min-height: 44px;
+  border-radius: 0;
+  color: #8a949e;
+}
+
+.tag-cloud-delete.n-button:hover {
+  color: #b32d2e;
 }
 
 .taxonomy-name-cell {

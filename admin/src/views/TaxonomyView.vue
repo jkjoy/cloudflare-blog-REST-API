@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FolderTree, Hash, Pencil, Plus, Search, Tags, Trash2 } from '@lucide/vue';
+import { FolderTree, Hash, Pencil, Plus, Search, Trash2 } from '@lucide/vue';
 import {
   NButton,
   NDrawer,
@@ -82,6 +82,19 @@ const parentOptions = computed(() => {
   ];
 });
 const parentNames = computed(() => new Map(allCategories.value.map((category) => [category.id, category.name])));
+const tagCountRange = computed(() => {
+  const counts = terms.value.map((term) => term.count);
+  return {
+    min: counts.length ? Math.min(...counts) : 0,
+    max: counts.length ? Math.max(...counts) : 0,
+  };
+});
+
+function tagCloudFontSize(count: number) {
+  const { min, max } = tagCountRange.value;
+  if (max === min) return 15;
+  return Math.round((13 + ((count - min) / (max - min)) * 7) * 10) / 10;
+}
 
 async function loadAllCategories() {
   if (!isCategories.value) {
@@ -101,24 +114,36 @@ async function loadAllCategories() {
 
 async function loadTerms() {
   const version = ++requestVersion;
+  const requestKind = props.kind;
+  const categoriesRequest = requestKind === 'categories';
   loading.value = true;
+  const pageSize = categoriesRequest ? perPage : 100;
   const params = new URLSearchParams({
-    page: String(page.value),
-    per_page: String(perPage),
+    page: String(categoriesRequest ? page.value : 1),
+    per_page: String(pageSize),
     orderby: 'name',
   });
   if (search.value.trim()) params.set('search', search.value.trim());
 
   try {
     const [response] = await Promise.all([
-      apiFetch(`/${props.kind}?${params.toString()}`, {}, auth.token),
-      isCategories.value ? loadAllCategories() : Promise.resolve(),
+      apiFetch(`/${requestKind}?${params.toString()}`, {}, auth.token),
+      categoriesRequest ? loadAllCategories() : Promise.resolve(),
     ]);
     const data = await response.json() as Term[];
+    const responsePages = Math.max(1, Number(response.headers.get('X-WP-TotalPages')) || 1);
+    if (!categoriesRequest && responsePages > 1) {
+      const remaining = await Promise.all(Array.from({ length: responsePages - 1 }, (_, index) => {
+        const nextParams = new URLSearchParams(params);
+        nextParams.set('page', String(index + 2));
+        return apiJson<Term[]>(`/${requestKind}?${nextParams.toString()}`, {}, auth.token);
+      }));
+      data.push(...remaining.flat());
+    }
     if (version !== requestVersion) return;
     terms.value = data;
     total.value = Number(response.headers.get('X-WP-Total')) || data.length;
-    totalPages.value = Math.max(1, Number(response.headers.get('X-WP-TotalPages')) || 1);
+    totalPages.value = categoriesRequest ? responsePages : 1;
   } catch (error) {
     if (version !== requestVersion) return;
     terms.value = [];
@@ -240,7 +265,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
     </div>
 
     <NSpin :show="loading">
-      <div v-if="terms.length" class="taxonomy-table">
+      <div v-if="terms.length && isCategories" class="taxonomy-table">
         <div class="taxonomy-table-head" aria-hidden="true">
           <span>{{ t('taxonomy.name') }}</span>
           <span>{{ t('taxonomy.slug') }}</span>
@@ -250,7 +275,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
         </div>
         <article v-for="term in terms" :key="term.id" class="taxonomy-row">
           <div class="taxonomy-name-cell">
-            <component :is="isCategories ? FolderTree : Tags" :size="18" stroke-width="1.8" />
+            <FolderTree :size="18" stroke-width="1.8" />
             <div>
               <strong>{{ term.name }}</strong>
               <small v-if="isCategories && term.parent">{{ t('taxonomy.parent') }}: {{ parentNames.get(term.parent) || '-' }}</small>
@@ -282,12 +307,44 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           </div>
         </article>
       </div>
+      <div v-else-if="terms.length" class="tag-cloud">
+        <article v-for="term in terms" :key="term.id" class="tag-cloud-item">
+          <button
+            type="button"
+            class="tag-cloud-edit"
+            :title="`${t('taxonomy.edit')}: #${term.name} /${term.slug}`"
+            @click="openEdit(term)"
+          >
+            <Hash :size="14" aria-hidden="true" />
+            <strong :style="{ fontSize: `${tagCloudFontSize(term.count)}px` }">{{ term.name }}</strong>
+            <span class="tag-cloud-count" :aria-label="`${t('taxonomy.count')}: ${term.count}`">{{ term.count }}</span>
+          </button>
+          <NPopconfirm
+            :positive-text="t('taxonomy.confirmDelete')"
+            :negative-text="t('taxonomy.cancel')"
+            @positive-click="deleteTerm(term)"
+          >
+            <template #trigger>
+              <NButton
+                quaternary
+                class="tag-cloud-delete"
+                :loading="deletingId === term.id"
+                :aria-label="`${t('taxonomy.delete')}: ${term.name}`"
+                :title="`${t('taxonomy.delete')}: ${term.name}`"
+              >
+                <template #icon><NIcon><Trash2 /></NIcon></template>
+              </NButton>
+            </template>
+            {{ t('taxonomy.deleteTagConfirm') }}
+          </NPopconfirm>
+        </article>
+      </div>
       <NEmpty v-else-if="!loading" class="content-empty" :description="search ? t('taxonomy.noSearchResults') : emptyText">
         <template #extra><NButton secondary @click="openCreate">{{ addFirstText }}</NButton></template>
       </NEmpty>
     </NSpin>
 
-    <footer v-if="totalPages > 1" class="content-pagination">
+    <footer v-if="isCategories && totalPages > 1" class="content-pagination">
       <NButton secondary :disabled="page <= 1" @click="changePage(page - 1)">{{ t('content.previous') }}</NButton>
       <span>{{ t('content.pageSummary').replace('{page}', String(page)).replace('{pages}', String(totalPages)) }}</span>
       <NButton secondary :disabled="page >= totalPages" @click="changePage(page + 1)">{{ t('content.next') }}</NButton>
