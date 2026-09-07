@@ -622,6 +622,23 @@ a {
   flex-direction: column;
 }
 
+.content-title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.content-title-line > strong,
+.content-title-link {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.content-sticky-tag {
+  flex: 0 0 auto;
+}
+
 .content-title-cell strong {
   overflow: hidden;
   color: #1f2933;

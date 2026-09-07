@@ -6,6 +6,7 @@ import {
   FileText,
   Files,
   MessageSquare,
+  Pin,
   RotateCcw,
   Search,
   Trash2,
@@ -227,16 +228,22 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           <div class="content-title-cell">
             <component :is="isPosts ? FileText : Files" :size="18" stroke-width="1.8" />
             <div>
-              <a
-                v-if="isPosts && item.status === 'publish'"
-                class="content-title-link"
-                :href="`/${encodeURIComponent(item.slug)}`"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <strong>{{ item.title.rendered || t('content.untitled') }}</strong>
-              </a>
-              <strong v-else>{{ item.title.rendered || t('content.untitled') }}</strong>
+              <div class="content-title-line">
+                <a
+                  v-if="isPosts && item.status === 'publish'"
+                  class="content-title-link"
+                  :href="`/${encodeURIComponent(item.slug)}`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <strong>{{ item.title.rendered || t('content.untitled') }}</strong>
+                </a>
+                <strong v-else>{{ item.title.rendered || t('content.untitled') }}</strong>
+                <NTag v-if="isPosts && item.sticky" class="content-sticky-tag" size="small" type="warning" :bordered="false">
+                  <template #icon><NIcon><Pin /></NIcon></template>
+                  {{ t('content.sticky') }}
+                </NTag>
+              </div>
               <small>/{{ item.slug }}</small>
             </div>
           </div>
